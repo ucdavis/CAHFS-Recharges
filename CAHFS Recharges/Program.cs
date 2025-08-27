@@ -158,16 +158,9 @@ try
     // Quartz setup
     builder.Services.AddQuartz(q =>
     {
-        q.Properties["quartz.jobStore.tablePrefix"] = "QRTZ_";
-        q.UseDefaultThreadPool(x => x.MaxConcurrency = 5);
-        q.MisfireThreshold = TimeSpan.FromSeconds(5);
-        q.UsePersistentStore(storeOptions =>
-        {
-            storeOptions.UseProperties = true;
-            storeOptions.UseSqlServer(builder.Configuration.GetConnectionString("VIPER") ?? "");
-            storeOptions.UseSystemTextJsonSerializer();
-            storeOptions.PerformSchemaValidation = true;
-        });
+        //q.Properties["quartz.jobStore.tablePrefix"] = "QRTZ_";
+        //q.UseDefaultThreadPool(x => x.MaxConcurrency = 5);
+        //q.MisfireThreshold = TimeSpan.FromSeconds(5);
     });
     builder.Services.AddQuartzHostedService(q =>
     {

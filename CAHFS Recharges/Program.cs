@@ -143,12 +143,14 @@ try
         options.ExcludedHosts.Add("vetmed.ucdavis.edu");
     });
 
-    // Settings when forcing HTTPS
+	// Settings when forcing HTTPS
+	/*
     builder.Services.AddHttpsRedirection(options =>
     {
         options.RedirectStatusCode = (int)HttpStatusCode.TemporaryRedirect;
         options.HttpsPort = 443;
     });
+	*/
 
     builder.Services.AddDbContext<FinancialContext>();
 
@@ -196,8 +198,7 @@ try
             .From("data:")// Allow data: images
             .From("https://www.google-analytics.com")
             .From("*.ucdavis.edu")
-            .From("*.vetmed.ucdavis.edu")
-            .From("http://localhost");//viper1 typically runs on http on developer machines
+            .From("*.vetmed.ucdavis.edu");
 
         csp.AllowPlugins
             .FromNowhere(); // Plugins not allowed
@@ -213,7 +214,7 @@ try
         app.UseExceptionHandler("/Error");
         // see https://aka.ms/aspnetcore-hsts.
         app.UseHsts();
-        app.UseHttpsRedirection(); // Force HTTPS
+        //app.UseHttpsRedirection(); // Force HTTPS
     }
     else
     {

@@ -33,7 +33,6 @@ pipeline {
 		/*
 		stage('Tests') {
 			steps {
-                bat 'type NUL > app_offline.htm'
 				bat '"C:\\Program Files\\dotnet\\dotnet" test ./test/Viper.test.csproj -e Test --logger "junit" --configuration release --nologo'
             }
 		}
@@ -43,6 +42,8 @@ pipeline {
 				expression { params.Branch == 'development' }
 			}
 			steps {
+				bat 'type NUL > app_offline.htm'
+				bat 'robocopy "." "C:\\inetpub\\wwwroot\\caei-test" /IF app_offline.htm /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:10 /W:3) & IF %ERRORLEVEL% LSS 8 EXIT /B 0'
 				bat 'robocopy ".\\CAHFS Recharges\\bin\\Release\\net8.0\\publish" "C:\\inetpub\\wwwroot\\caei-test" /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:10 /W:3) & IF %ERRORLEVEL% LSS 8 EXIT /B 0'
 			}
 		}
@@ -51,6 +52,8 @@ pipeline {
 				expression { params.Branch == "main" }
 			}
 			steps {
+				bat 'type NUL > app_offline.htm'
+				bat 'robocopy "." "C:\\inetpub\\wwwroot\\caei" /IF app_offline.htm /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:10 /W:3) & IF %ERRORLEVEL% LSS 8 EXIT /B 0'
 				bat 'robocopy ".\\CAHFS Recharges\\bin\\Release\\net8.0\\publish" "C:\\inetpub\\wwwroot\\caei" /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:10 /W:3) & IF %ERRORLEVEL% LSS 8 EXIT /B 0'
 			}
 		}

@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+	tools {  }
+    options {
+        skipStagesAfterUnstable()
+    }
+    stages { 
+        stage('Restore packages') {
+			steps {
+				bat '"C:\\Program Files\\dotnet\\dotnet" restore CAHFS Recharges.sln'
+			}
+		}
+        stage('Clean Previous Build') {
+			steps {
+				bat '"C:\\Program Files\\dotnet\\dotnet" clean CAHFS Recharges.sln'
+			}
+		}
+		stage('Build for test') {
+			when {
+				expression { params.Branch == 'development' }
+			}
+			steps {
+				bat '"C:\\Program Files\\dotnet\\dotnet" publish "./CAHFS Recharges/CAHFS Recharges.csproj" -c "Release" /p:EnvironmentName=Test'
+			}
+		}
+		stage('Build for prod') {
+			when {
+				expression { params.Branch == "main" }
+			}
+			steps {
+				bat '"C:\\Program Files\\dotnet\\dotnet" publish "./CAHFS Recharges/CAHFS Recharges.csproj" -c "Release" /p:EnvironmentName=Production'
+			}
+		}
+		/*
+		stage('Tests') {
+			steps {
+                bat 'type NUL > app_offline.htm'
+				bat '"C:\\Program Files\\dotnet\\dotnet" test ./test/Viper.test.csproj -e Test --logger "junit" --configuration release --nologo'
+            }
+		}
+		*/
+		stage('Deploy to test') {
+			when {
+				expression { params.Branch == 'development' }
+			}
+			steps {
+				bat 'robocopy ".\\CAHFS Recharges\\bin\\Release\\net8.0\\publish" "C:\\inetpub\\wwwroot\\caei-test" /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:10 /W:3) & IF %ERRORLEVEL% LSS 8 EXIT /B 0'
+			}
+		}
+		stage('Deploy to prod') {
+			when {
+				expression { params.Branch == "main" }
+			}
+			steps {
+				bat 'robocopy ".\\CAHFS Recharges\\bin\\Release\\net8.0\\publish" "C:\\inetpub\\wwwroot\\caei" /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:10 /W:3) & IF %ERRORLEVEL% LSS 8 EXIT /B 0'
+			}
+		}
+    }
+	post {
+			always {
+				//Archive the artifacts - in this case, all files - so that the restore job can re-deploy them.
+				archiveArtifacts artifacts: 'web/bin/Release/net8.0/publish/**/*', fingerprint: true, onlyIfSuccessful: true
+			}
+		}
+}

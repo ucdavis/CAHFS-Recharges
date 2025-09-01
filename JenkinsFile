@@ -6,12 +6,12 @@ pipeline {
     stages { 
         stage('Restore packages') {
 			steps {
-				bat '"C:\\Program Files\\dotnet\\dotnet" restore CAHFS Recharges.sln'
+				bat '"C:\\Program Files\\dotnet\\dotnet" restore "CAHFS Recharges.sln"'
 			}
 		}
         stage('Clean Previous Build') {
 			steps {
-				bat '"C:\\Program Files\\dotnet\\dotnet" clean CAHFS Recharges.sln'
+				bat '"C:\\Program Files\\dotnet\\dotnet" clean "CAHFS Recharges.sln"'
 			}
 		}
 		stage('Build for test') {

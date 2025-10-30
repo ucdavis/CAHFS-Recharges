@@ -4,6 +4,7 @@
     ViewData["Title"] = "Home page";
     var user = ViewData["User"];
     var canAccessDatabase = ViewData["CanAccessDatabase"];
+    var errorMessage = ViewData["ErrorMessage"];
 }
 
 <div class="text-center">
@@ -13,6 +14,9 @@
     {
         <p style="color: maroon; font-weight: bold;">
             Cannot connect to database
+        </p>
+        <p>
+            @errorMessage
         </p>
     }
 </div>

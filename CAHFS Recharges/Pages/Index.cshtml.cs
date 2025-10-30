@@ -24,6 +24,8 @@ namespace CAHFS_Recharges.Pages
             var user = HttpHelper.HttpContext?.User?.Identity?.Name;
             var settings = HttpHelper.Settings;
             bool canAccessDatabase = false;
+            ViewData["ErrorMessage"] = "";
+
             try
             {
                 //var feedbatches = _context.FeedBatches.Take(10).ToList();
@@ -34,6 +36,8 @@ namespace CAHFS_Recharges.Pages
             {
                 _logger.Error(ex, "Error accessing database");
                 _logger.Error(ex, ex.Message);
+
+                ViewData["ErrorMessage"] = ex.Message;
             }
 
             ViewData["CanAccessDatabase"] = canAccessDatabase;

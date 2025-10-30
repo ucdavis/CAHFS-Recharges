@@ -12,8 +12,6 @@ namespace CAHFS_Recharges.Data
 
         }
 
-        public virtual DbSet<ExampleTable> AppControls { get; set; }
-
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             if (HttpHelper.Settings != null)

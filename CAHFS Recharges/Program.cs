@@ -44,7 +44,8 @@ try
         // AWS Configurations
         AWSOptions awsOptions = new()
         {
-            Region = RegionEndpoint.USWest1
+            Region = RegionEndpoint.USWest1,
+            Profile = "cahfs"
         };
         builder.Configuration
             .AddSystemsManager("/" + builder.Environment.EnvironmentName, awsOptions)
@@ -153,6 +154,7 @@ try
 	*/
 
     builder.Services.AddDbContext<FinancialContext>();
+    builder.Services.AddDbContext<StarLIMSContext>();
 
     // Add Data Protection services (i.e. encryption)
     builder.Services.AddDataProtection();
@@ -269,7 +271,7 @@ void SetAwsCredentials(Logger logger)
             SecretKey = xAwsCredentials?.Element("SecretAccessKey")?.Value.Trim()
         };
 
-        var profile = new CredentialProfile("default", options);
+        var profile = new CredentialProfile("cahfs", options);
         // if a region was specified in the xml then use the specified region else default to USWest1
         if (!string.IsNullOrWhiteSpace(xAwsCredentials?.Element("RegionEndpoint")?.Value) && xAwsCredentials?.Element("RegionEndpoint") != null)
         {

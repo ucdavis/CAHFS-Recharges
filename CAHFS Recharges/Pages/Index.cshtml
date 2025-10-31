@@ -3,9 +3,20 @@
 @{
     ViewData["Title"] = "Home page";
     var user = ViewData["User"];
+    var canAccessDatabase = ViewData["CanAccessDatabase"];
+    var errorMessage = ViewData["ErrorMessage"];
 }
 
 <div class="text-center">
     <h1 class="display-4">Welcome @user</h1>
     <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    @if (canAccessDatabase == null || !(bool)canAccessDatabase)
+    {
+        <p style="color: maroon; font-weight: bold;">
+            Cannot connect to database
+        </p>
+        <p>
+            @errorMessage
+        </p>
+    }
 </div>

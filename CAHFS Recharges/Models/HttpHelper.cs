@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using NLog;
 
@@ -59,6 +60,10 @@ namespace CAHFS_Recharges.Models
         /// <returns></returns>
         public static T? GetSetting<T>(string section, string setting)
         {
+            var val = Settings == null
+                ? default
+                : Settings.GetSection(section).GetValue<T>(setting);
+            logger.Warn("section " + section + " " + val == null ? "null" : val.ToString().Length);
             return Settings == null
                 ? default
                 : Settings.GetSection(section).GetValue<T>(setting);

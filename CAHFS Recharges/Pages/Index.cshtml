@@ -3,20 +3,32 @@
 @{
     ViewData["Title"] = "Home page";
     var user = ViewData["User"];
-    var canAccessDatabase = ViewData["CanAccessDatabase"];
-    var errorMessage = ViewData["ErrorMessage"];
+    var canAccessSLDatabase = ViewData["canAccessSLDatabase"];
+    var canAccessGPDatabase = ViewData["canAccessGPDatabase"];
+    var sLErrorMessage = ViewData["SLErrorMessage"];
+    var gPErrorMessage = ViewData["GPErrorMessage"];
 }
 
 <div class="text-center">
     <h1 class="display-4">Welcome @user</h1>
     <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-    @if (canAccessDatabase == null || !(bool)canAccessDatabase)
+    @if (canAccessSLDatabase == null || !(bool)canAccessSLDatabase)
     {
         <p style="color: maroon; font-weight: bold;">
-            Cannot connect to database
+            Cannot connect to SL database
         </p>
         <p>
-            @errorMessage
+            @sLErrorMessage
+        </p>
+    }
+    @if (canAccessGPDatabase == null || !(bool)canAccessGPDatabase)
+    {
+        <p style="color: maroon; font-weight: bold;">
+            Cannot connect to GP database
+        </p>
+        <p>
+            @gPErrorMessage
         </p>
     }
 </div>
+

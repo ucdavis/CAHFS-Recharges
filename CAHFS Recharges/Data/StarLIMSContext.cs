@@ -16,7 +16,7 @@ namespace CAHFS_Recharges.Data
         {
             if (HttpHelper.Settings != null)
             {
-                optionsBuilder.UseSqlServer(HttpHelper.Settings["ConnectionStrings:StarLIMSDB"]);
+                optionsBuilder.UseSqlServer(HttpHelper.GetSetting<string>("ConnectionStrings", "StarLIMSDB"));
             }
         }
 

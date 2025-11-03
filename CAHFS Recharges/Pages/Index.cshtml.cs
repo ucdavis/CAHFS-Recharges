@@ -23,24 +23,40 @@ namespace CAHFS_Recharges.Pages
         {
             var user = HttpHelper.HttpContext?.User?.Identity?.Name;
             var settings = HttpHelper.Settings;
-            bool canAccessDatabase = false;
-            ViewData["ErrorMessage"] = "";
+            bool canAccessSLDatabase = false;
+            bool canAccessGPDatabase = false;
+            ViewData["SLErrorMessage"] = "";
+            ViewData["GPErrorMessage"] = "";
 
             try
             {
                 //var feedbatches = _context.FeedBatches.Take(10).ToList();
                 var ordtasks = _slimsContext.OrdTasks.Take(10).ToList();
-                canAccessDatabase = true;
+                canAccessSLDatabase = true;
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "Error accessing database");
                 _logger.Error(ex, ex.Message);
 
-                ViewData["ErrorMessage"] = ex.Message;
+                ViewData["SLErrorMessage"] = ex.Message;
             }
 
-            ViewData["CanAccessDatabase"] = canAccessDatabase;
+            try
+            {
+                var feedbatches = _context.FeedBatches.Take(10).ToList();                
+                canAccessGPDatabase = true;
+            }
+            catch (Exception ex2)
+            {
+                _logger.Error(ex2, "Error accessing database");
+                _logger.Error(ex2, ex2.Message);
+
+                ViewData["GPErrorMessage"] = ex2.Message;
+            }
+
+            ViewData["canAccessSLDatabase"] = canAccessSLDatabase;
+            ViewData["canAccessGPDatabase"] = canAccessGPDatabase;
             ViewData["User"] = user;
         }
     }

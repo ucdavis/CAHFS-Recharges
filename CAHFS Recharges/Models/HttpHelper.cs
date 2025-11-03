@@ -77,6 +77,15 @@ namespace CAHFS_Recharges.Models
             {
                 Uri url = new(thisRequest.GetDisplayUrl());
                 rootURL = url.GetLeftPart(UriPartial.Authority);
+
+                if(Environment != null && Environment.IsEnvironment("Test"))
+                {
+                    rootURL += "/caei-test";
+                }
+                else if (Environment != null && Environment.IsEnvironment("Production"))
+                {
+                    rootURL += "/caei";
+                }
             }
 
             return rootURL ?? string.Empty;

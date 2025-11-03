@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using NLog;
 
@@ -59,6 +60,10 @@ namespace CAHFS_Recharges.Models
         /// <returns></returns>
         public static T? GetSetting<T>(string section, string setting)
         {
+            var val = Settings == null
+                ? default
+                : Settings.GetSection(section).GetValue<T>(setting);
+            logger.Warn("section " + section + " " + val == null ? "null" : val.ToString().Length);
             return Settings == null
                 ? default
                 : Settings.GetSection(section).GetValue<T>(setting);
@@ -77,6 +82,15 @@ namespace CAHFS_Recharges.Models
             {
                 Uri url = new(thisRequest.GetDisplayUrl());
                 rootURL = url.GetLeftPart(UriPartial.Authority);
+
+                if(Environment != null && Environment.IsEnvironment("Test"))
+                {
+                    rootURL += "/caei-test";
+                }
+                else if (Environment != null && Environment.IsEnvironment("Production"))
+                {
+                    rootURL += "/caei";
+                }
             }
 
             return rootURL ?? string.Empty;

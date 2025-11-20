@@ -20,3 +20,20 @@ html {
 body {
   margin-bottom: 60px;
 }
+
+/* Scrollable table container (Staging data tables)*/
+.table-scroll-container {
+    max-height: 250px; /* adjust this height as you like */
+    overflow-y: auto; /* vertical scroll inside the box */
+    overflow-x: auto; /* horizontal scroll if needed */
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+}
+
+    /* keep table header visible while scrolling */
+    .table-scroll-container thead th {
+        position: sticky;
+        top: 0;
+        background-color: #fff;
+        z-index: 1;
+    }

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>CAHFS_Recharges</RootNamespace>
@@ -29,6 +29,7 @@
 		<PackageReference Include="System.Linq.Dynamic.Core" Version="1.6.0.2" />
 		<PackageReference Include="OWASP.AntiSamy" Version="1.2.1" />
 		<PackageReference Include="System.Security.Claims" Version="4.3.0" />
+		<PackageReference Include="ZeroQL" Version="7.0.3" />
 	</ItemGroup>
 
 	<ItemGroup>

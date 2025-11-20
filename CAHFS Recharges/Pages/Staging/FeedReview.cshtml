@@ -1,0 +1,178 @@
+@page
+@model CAHFS_Recharges.Pages.Staging.FeedReviewModel
+@{
+    ViewData["Title"] = "Staging – Feed Batches & Items";
+}
+
+<h1>Staging – Feed Batches & Items</h1>
+<p>
+    This view shows data from <strong>C_AE_Feed_Batch</strong> and
+    <strong>C_AE_Feed_Items</strong> to help validate the staging tables.
+</p>
+
+<form method="get" class="mb-3">
+    <div class="row">
+        <div class="col-md-2">
+            <label asp-for="FromDate" class="form-label">From date</label>
+            <input asp-for="FromDate" class="form-control" type="date" />
+        </div>
+        <div class="col-md-2">
+            <label asp-for="ToDate" class="form-label">To date</label>
+            <input asp-for="ToDate" class="form-control" type="date" />
+        </div>
+        <div class="col-md-2">
+            <label asp-for="Status" class="form-label">Status</label>
+            <input asp-for="Status" class="form-control" placeholder="SUCCESS / ERROR" />
+        </div>
+        <div class="col-md-3">
+            <label asp-for="JournalName" class="form-label">Journal name</label>
+            <input asp-for="JournalName" class="form-control" />
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary me-2">Apply filters</button>
+            <a asp-page="./FeedReview" class="btn btn-secondary">Clear</a>
+        </div>
+    </div>
+</form>
+
+@if (!Model.Batches.Any())
+{
+<p><em>No batches found for the selected filters.</em></p>
+}
+else
+{
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="mb-0">Showing @Model.Batches.Count batch(es) (max 200).</p>
+
+    <div>
+        <a class="btn btn-primary btn-sm"
+           asp-page-handler="DownloadBatches"
+           asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+           asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+           asp-route-Status="@Model.Status"
+           asp-route-JournalName="@Model.JournalName">
+            Download Batch
+        </a>
+    </div>
+</div>
+
+<h3>Batches (C_AE_Feed_Batch)</h3>
+
+<div class="table-scroll-container mt-2">
+    <table class="table table-striped table-sm mb-0">
+        <thead>
+            <tr>
+                <th></th>
+                <th>Batch ID</th>
+                <th>Txn Date</th>
+                <th>Date Sent</th>
+                <th>Status</th>
+                <th>Journal Name</th>
+                <th>Journal Ref</th>
+                <th>Batch Total</th>
+                <th>Error Detail</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var b in Model.Batches)
+        {
+            var isSelected = Model.SelectedBatchId.HasValue && Model.SelectedBatchId.Value == b.BatchID;
+            <tr class="@(isSelected ? "table-primary" : "")">
+                <td>
+                    <a asp-page="./FeedReview"
+                       asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                       asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                       asp-route-Status="@Model.Status"
+                       asp-route-JournalName="@Model.JournalName"
+                       asp-route-SelectedBatchId="@b.BatchID">
+                        View items
+                    </a>
+                </td>
+                <td>@b.BatchID</td>
+                <td>@(b.AETransactionDate?.ToString("yyyy-MM-dd") ?? "")</td>
+                <td>@(b.DateSent?.ToString("yyyy-MM-dd") ?? "")</td>
+                <td>@b.AERequestStatus</td>
+                <td>@b.AEJournalName</td>
+                <td>@b.AEJournalReference</td>
+                <td>@(b.BatchTotal?.ToString("N2"))</td>
+                <td>@b.ErrorDetail</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+}
+
+<h3 class="mt-4">
+    Items (C_AE_Feed_Items)
+    @if (Model.SelectedBatchId.HasValue)
+    {
+    <small class="text-muted">for Batch @Model.SelectedBatchId</small>
+    }
+</h3>
+
+@if (Model.SelectedBatchId.HasValue && Model.Items.Any())
+{
+<div class="d-flex justify-content-end mb-2">
+    <a class="btn btn-primary btn-sm"
+       asp-page-handler="DownloadItems"
+       asp-route-SelectedBatchId="@Model.SelectedBatchId"
+       asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+       asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+       asp-route-Status="@Model.Status"
+       asp-route-JournalName="@Model.JournalName">
+        Download Items
+    </a>
+</div>
+}
+
+
+@if (!Model.Items.Any())
+{
+<p><em>No items for this batch.</em></p>
+}
+else
+{
+<div class="table-scroll-container mt-2">
+    <table class="table table-bordered table-sm mb-0">
+        <thead>
+            <tr>
+                <th>Record ID</th>
+                <th>Original Doc #</th>
+                <th>Receivables Chart</th>
+                <th>Income Chart</th>
+                <th>Txn Date</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total Charge</th>
+                <th>Client ID</th>
+                <th>System ID</th>
+                <th>Income String OK</th>
+                <th>Receivable String OK</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var i in Model.Items)
+            {
+            <tr>
+                <td>@i.RecordID</td>
+                <td>@i.OrignalDocNumber</td>
+                <td>@i.ReceivablesChartString</td>
+                <td>@i.IncomeChartString</td>
+                <td>@(i.TransactionDate?.ToString("yyyy-MM-dd") ?? "")</td>
+                <td>@i.Quantity</td>
+                <td>@(i.UnitPrice?.ToString("N2"))</td>
+                <td>@i.TotalCharge.ToString("N2")</td>
+                <td>@i.ClientID</td>
+                <td>@i.SystemID</td>
+                <td>@i.IncomeStringValid</td>
+                <td>@i.ReceivableStringValid</td>
+                <td>@i.Description</td>
+            </tr>
+            }
+        </tbody>
+    </table>
+</div>
+}
+

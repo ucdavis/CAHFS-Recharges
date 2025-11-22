@@ -5,7 +5,9 @@ namespace CAHFS_Recharges.Data
 {
     public class FinancialContext : DbContext
     {
-        public virtual DbSet<FeedBatch> FeedBatches { get; set; }
+        public virtual DbSet<FeedBatch> FeedBatches { get; set; } = null!;
+        public virtual DbSet<FeedItem> FeedItems { get; set; } = null!;
+
 
         public FinancialContext()
         {

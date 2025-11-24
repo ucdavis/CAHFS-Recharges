@@ -26,6 +26,7 @@
 		<PackageReference Include="Quartz.Extensions.DependencyInjection" Version="3.13.1" />
 		<PackageReference Include="Quartz.Serialization.SystemTextJson" Version="3.13.1" />
 		<PackageReference Include="Quartz.Extensions.Hosting" Version="3.13.1" />
+		<PackageReference Include="StrawberryShake.Razor" Version="15.1.11" />
 		<PackageReference Include="System.Linq.Dynamic.Core" Version="1.6.0.2" />
 		<PackageReference Include="OWASP.AntiSamy" Version="1.2.1" />
 		<PackageReference Include="System.Security.Claims" Version="4.3.0" />
@@ -35,6 +36,10 @@
 	  <Content Update="nlog.config">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </Content>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Queries\" />
 	</ItemGroup>
 
 </Project>

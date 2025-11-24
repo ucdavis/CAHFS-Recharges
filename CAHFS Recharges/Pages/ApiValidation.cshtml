@@ -1,0 +1,42 @@
+﻿@page
+@using CAHFS.GraphQl
+@model CAHFS_Recharges.Pages.ApiValidationModel
+@{
+    var apiInfo = ViewData["ErpApiInfo"] as ErpApiInfoResult;
+    var chartString1 = ViewData["ChartStringValidation1"] as IGlValidateChartstringResult;
+    var chartString2 = ViewData["ChartStringValidation2"] as IGlValidateChartstringResult;
+}
+
+<div>
+    @if (apiInfo != null)
+    {
+        <span>Aggie Enterprise API Version #</span>
+        <span>@apiInfo.ErpApiInfo.VersionNumber</span>
+    }
+    else
+    {
+        <span>No API Info</span>
+    }
+</div>
+<div>
+    @if (chartString1 != null)
+    {
+        <span>Chart String 1 Valid:</span>
+        <span>@chartString1.GlValidateChartstring.ValidationResponse.Valid</span>
+    }
+    else
+    {
+        <span>No Chart String Validation Info</span>
+    }
+</div>
+<div>
+    @if (chartString2 != null)
+    {
+        <span>Chart String 2 Valid:</span>
+        <span>@chartString2.GlValidateChartstring.ValidationResponse.Valid</span>
+    }
+    else
+    {
+        <span>No Chart String Validation Info</span>
+    }
+</div>

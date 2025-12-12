@@ -1,0 +1,10 @@
+query ErpApiInfo() {
+	erpApiInfo {
+		versionNumber
+		shortHash
+		branch
+		committedOn
+		erpSchema
+		apiSchema
+	}
+}

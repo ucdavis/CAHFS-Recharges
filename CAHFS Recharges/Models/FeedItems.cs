@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CAHFS_Recharges.Models
 {
-    [Table("C_AE_Feed_Items")]   // optional, but matches your table name
+    [Table("C_AE_Feed_Items")]
     public class FeedItem
     {
         [Key]
@@ -14,14 +14,20 @@ namespace CAHFS_Recharges.Models
         [Column("orginalDocNumber")]
         public string OrignalDocNumber { get; set; } = null!;
 
-        [Column("receivablesChartString")]
-        public string ReceivablesChartString { get; set; } = null!;
+        [Column("DebitChartString")]
+        public string? DebitChartString { get; set; }
 
-        [Column("incomeChartString")]
-        public string IncomeChartString { get; set; } = null!;
+        [Column("CreditChartString")]
+        public string? CreditChartString { get; set; }
 
         [Column("transactionDate")]
-        public DateTime? TransactionDate { get; set; }
+        public DateTime TransactionDate { get; set; }
+
+        [Column("TestCode")]
+        public string? TestCode { get; set; }
+
+        [Column("TestName")]
+        public string? TestName { get; set; }
 
         [Column("quantity")]
         public int? Quantity { get; set; }
@@ -36,18 +42,15 @@ namespace CAHFS_Recharges.Models
         public Guid BatchID { get; set; }
 
         [Column("clientID")]
-        public string ClientID { get; set; } = null!;
+        public string? ClientID { get; set; }
 
         [Column("systemID")]
-        public int? SystemID { get; set; }
+        public int SystemID { get; set; }
 
-        [Column("incomeStringValid")]
-        public string? IncomeStringValid { get; set; }
+        [Column("DebitStringValid")]
+        public string? DebitStringValid { get; set; }
 
-        [Column("receivableStringValid")]
-        public string? ReceivableStringValid { get; set; }
-
-        [Column("description")]
-        public string? Description { get; set; }
+        [Column("CreditStringValid")]
+        public string? CreditStringValid { get; set; }
     }
 }

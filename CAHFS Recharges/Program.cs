@@ -3,11 +3,11 @@ using Amazon.Extensions.NETCore.Setup;
 using Amazon.Runtime.CredentialManagement;
 using CAHFS_Recharges.Data;
 using CAHFS_Recharges.Models;
+using CAHFS_Recharges.Services;
 using Joonasw.AspNetCore.SecurityHeaders;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Caching.Memory;
 using NLog;
 using NLog.Web;
@@ -15,7 +15,6 @@ using Polly;
 using Polly.Extensions.Http;
 using Polly.Timeout;
 using Quartz;
-using System.Net;
 using System.Security.Claims;
 using System.Xml.Linq;
 
@@ -171,6 +170,32 @@ try
         q.AwaitApplicationStarted = true;
         q.WaitForJobsToComplete = true;
     });
+
+
+    //Strawberry shake config
+    /*
+    builder.Services.AddScoped(sp => new HttpClient
+    {
+        BaseAddress = new Uri(builder.Configuration.GetSection("AggieEnterprise").GetValue<string>("BaseUrl") ?? "")
+    });
+    */
+
+    builder.Services.AddSingleton<ITokenService, TokenService>();
+    builder.Services.AddTransient<AuthorizationMessageHandler>();
+
+
+    builder.Services
+        .AddAggieEnterpriseClient()
+        .ConfigureHttpClient((sp, client) =>
+        {
+            var config = sp.GetService<IConfiguration>();
+            var baseUrl = config?.GetSection("AggieEnterprise").GetValue<string>("BaseUrl") ?? "";
+            client.BaseAddress = new Uri(baseUrl);
+        }, builder =>
+        {
+            builder.AddHttpMessageHandler<AuthorizationMessageHandler>();
+        });
+
 
     var app = builder.Build();
 

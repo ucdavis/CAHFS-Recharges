@@ -75,8 +75,8 @@ else
         </thead>
         <tbody>
             @foreach (var b in Model.Batches)
-        {
-            var isSelected = Model.SelectedBatchId.HasValue && Model.SelectedBatchId.Value == b.BatchID;
+                {
+                    var isSelected = Model.SelectedBatchId.HasValue && Model.SelectedBatchId.Value == b.BatchID;
             <tr class="@(isSelected ? "table-primary" : "")">
                 <td>
                     <a asp-page="./FeedReview"
@@ -97,7 +97,7 @@ else
                 <td>@(b.BatchTotal?.ToString("N2"))</td>
                 <td>@b.ErrorDetail</td>
             </tr>
-        }
+                }
         </tbody>
     </table>
 </div>
@@ -126,7 +126,6 @@ else
 </div>
 }
 
-
 @if (!Model.Items.Any())
 {
 <p><em>No items for this batch.</em></p>
@@ -139,40 +138,42 @@ else
             <tr>
                 <th>Record ID</th>
                 <th>Original Doc #</th>
-                <th>Receivables Chart</th>
-                <th>Income Chart</th>
+                <th>Debit Chart</th>
+                <th>Credit Chart</th>
                 <th>Txn Date</th>
                 <th>Qty</th>
                 <th>Unit Price</th>
                 <th>Total Charge</th>
                 <th>Client ID</th>
                 <th>System ID</th>
-                <th>Income String OK</th>
-                <th>Receivable String OK</th>
-                <th>Description</th>
+                <th>Debit Valid?</th>
+                <th>Credit Valid?</th>
+                <th>Test Code</th>
+                <th>Test Name</th>
             </tr>
         </thead>
+
         <tbody>
             @foreach (var i in Model.Items)
-            {
+                {
             <tr>
                 <td>@i.RecordID</td>
                 <td>@i.OrignalDocNumber</td>
-                <td>@i.ReceivablesChartString</td>
-                <td>@i.IncomeChartString</td>
-                <td>@(i.TransactionDate?.ToString("yyyy-MM-dd") ?? "")</td>
+                <td>@i.DebitChartString</td>
+                <td>@i.CreditChartString</td>
+                <td>@(i.TransactionDate == default ? "" : i.TransactionDate.ToString("yyyy-MM-dd"))</td>
                 <td>@i.Quantity</td>
                 <td>@(i.UnitPrice?.ToString("N2"))</td>
                 <td>@i.TotalCharge.ToString("N2")</td>
                 <td>@i.ClientID</td>
                 <td>@i.SystemID</td>
-                <td>@i.IncomeStringValid</td>
-                <td>@i.ReceivableStringValid</td>
-                <td>@i.Description</td>
+                <td>@i.DebitStringValid</td>
+                <td>@i.CreditStringValid</td>
+                <td>@i.TestCode</td>
+                <td>@i.TestName</td>
             </tr>
-            }
+                }
         </tbody>
     </table>
 </div>
 }
-

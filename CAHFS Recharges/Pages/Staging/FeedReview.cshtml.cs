@@ -11,8 +11,6 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
 
-
-
 namespace CAHFS_Recharges.Pages.Staging
 {
     public class FeedReviewModel : PageModel
@@ -24,7 +22,7 @@ namespace CAHFS_Recharges.Pages.Staging
             _context = context;
         }
 
-        // Common filters
+        // Filters
         [BindProperty(SupportsGet = true)]
         public DateTime? FromDate { get; set; }
 
@@ -37,14 +35,16 @@ namespace CAHFS_Recharges.Pages.Staging
         [BindProperty(SupportsGet = true)]
         public string? JournalName { get; set; }
 
-        // Which batch's items to show
+        // Selected batch
         [BindProperty(SupportsGet = true)]
         public Guid? SelectedBatchId { get; set; }
 
         public IList<FeedBatch> Batches { get; set; } = new List<FeedBatch>();
         public IList<FeedItem> Items { get; set; } = new List<FeedItem>();
 
-        // Download Item's data in Excel format
+        /* ============================================================
+           DOWNLOAD ITEMS EXCEL
+        ============================================================ */
         public async Task<IActionResult> OnGetDownloadItemsAsync()
         {
             if (!SelectedBatchId.HasValue)
@@ -63,19 +63,21 @@ namespace CAHFS_Recharges.Pages.Staging
 
             int row = 1;
 
-            ws.Cell(row, 1).Value = "recordID";
-            ws.Cell(row, 2).Value = "originalDocNumber";
-            ws.Cell(row, 3).Value = "receivablesChartString";
-            ws.Cell(row, 4).Value = "incomeChartString";
-            ws.Cell(row, 5).Value = "transactionDate";
-            ws.Cell(row, 6).Value = "quantity";
-            ws.Cell(row, 7).Value = "unitPrice";
-            ws.Cell(row, 8).Value = "totalCharge";
-            ws.Cell(row, 9).Value = "clientID";
-            ws.Cell(row, 10).Value = "systemID";
-            ws.Cell(row, 11).Value = "incomeStringValid";
-            ws.Cell(row, 12).Value = "receivableStringValid";
-            ws.Cell(row, 13).Value = "description";
+            // NEW HEADER
+            ws.Cell(row, 1).Value = "RecordID";
+            ws.Cell(row, 2).Value = "OriginalDocNumber";
+            ws.Cell(row, 3).Value = "DebitChartString";
+            ws.Cell(row, 4).Value = "CreditChartString";
+            ws.Cell(row, 5).Value = "TransactionDate";
+            ws.Cell(row, 6).Value = "Quantity";
+            ws.Cell(row, 7).Value = "UnitPrice";
+            ws.Cell(row, 8).Value = "TotalCharge";
+            ws.Cell(row, 9).Value = "ClientID";
+            ws.Cell(row, 10).Value = "SystemID";
+            ws.Cell(row, 11).Value = "DebitStringValid";
+            ws.Cell(row, 12).Value = "CreditStringValid";
+            ws.Cell(row, 13).Value = "TestCode";
+            ws.Cell(row, 14).Value = "TestName";
 
             row++;
 
@@ -83,17 +85,18 @@ namespace CAHFS_Recharges.Pages.Staging
             {
                 ws.Cell(row, 1).Value = i.RecordID.ToString();
                 ws.Cell(row, 2).Value = i.OrignalDocNumber;
-                ws.Cell(row, 3).Value = i.ReceivablesChartString;
-                ws.Cell(row, 4).Value = i.IncomeChartString;
+                ws.Cell(row, 3).Value = i.DebitChartString;
+                ws.Cell(row, 4).Value = i.CreditChartString;
                 ws.Cell(row, 5).Value = i.TransactionDate;
                 ws.Cell(row, 6).Value = i.Quantity;
                 ws.Cell(row, 7).Value = i.UnitPrice;
                 ws.Cell(row, 8).Value = i.TotalCharge;
                 ws.Cell(row, 9).Value = i.ClientID;
                 ws.Cell(row, 10).Value = i.SystemID;
-                ws.Cell(row, 11).Value = i.IncomeStringValid;
-                ws.Cell(row, 12).Value = i.ReceivableStringValid;
-                ws.Cell(row, 13).Value = i.Description;
+                ws.Cell(row, 11).Value = i.DebitStringValid;
+                ws.Cell(row, 12).Value = i.CreditStringValid;
+                ws.Cell(row, 13).Value = i.TestCode;
+                ws.Cell(row, 14).Value = i.TestName;
 
                 row++;
             }
@@ -112,24 +115,23 @@ namespace CAHFS_Recharges.Pages.Staging
         }
 
 
-        // Download Batch data in Excel format
+        /* ============================================================
+           DOWNLOAD BATCHES EXCEL
+        ============================================================ */
         public async Task<IActionResult> OnGetDownloadBatchesAsync()
         {
-            // Build the same filtered query
             var query = _context.FeedBatches.AsQueryable();
 
             if (FromDate.HasValue)
             {
                 var from = FromDate.Value.Date;
-                query = query.Where(b =>
-                    (b.AETransactionDate ?? b.DateSent) >= from);
+                query = query.Where(b => (b.AETransactionDate ?? b.DateSent) >= from);
             }
 
             if (ToDate.HasValue)
             {
                 var to = ToDate.Value.Date.AddDays(1);
-                query = query.Where(b =>
-                    (b.AETransactionDate ?? b.DateSent) < to);
+                query = query.Where(b => (b.AETransactionDate ?? b.DateSent) < to);
             }
 
             if (!string.IsNullOrWhiteSpace(Status))
@@ -142,8 +144,7 @@ namespace CAHFS_Recharges.Pages.Staging
             if (!string.IsNullOrWhiteSpace(JournalName))
             {
                 var j = JournalName.Trim();
-                query = query.Where(b => b.AEJournalName != null &&
-                                         b.AEJournalName.Contains(j));
+                query = query.Where(b => b.AEJournalName.Contains(j));
             }
 
             var batches = await query
@@ -152,16 +153,15 @@ namespace CAHFS_Recharges.Pages.Staging
                 .Take(200)
                 .ToListAsync();
 
-            // Build Excel workbook
             using var wb = new XLWorkbook();
             var ws = wb.Worksheets.Add("Batches");
 
             int row = 1;
 
-            // header row
-            ws.Cell(row, 1).Value = "batchID";
-            ws.Cell(row, 2).Value = "dateSent";
-            ws.Cell(row, 3).Value = "pickupSentFlag";
+            // HEADER
+            ws.Cell(row, 1).Value = "BatchID";
+            ws.Cell(row, 2).Value = "DateSent";
+            ws.Cell(row, 3).Value = "PickupSentFlag";
             ws.Cell(row, 4).Value = "AEConsumerReferenceID";
             ws.Cell(row, 5).Value = "AEConsumerNotes";
             ws.Cell(row, 6).Value = "AERequestStatus";
@@ -171,7 +171,7 @@ namespace CAHFS_Recharges.Pages.Staging
             ws.Cell(row, 10).Value = "AEJournalName";
             ws.Cell(row, 11).Value = "AEJournalDescription";
             ws.Cell(row, 12).Value = "AEJournalReference";
-            ws.Cell(row, 13).Value = "batchTotal";
+            ws.Cell(row, 13).Value = "BatchTotal";
 
             row++;
 
@@ -184,7 +184,7 @@ namespace CAHFS_Recharges.Pages.Staging
                 ws.Cell(row, 5).Value = b.AEConsumnerNotes;
                 ws.Cell(row, 6).Value = b.AERequestStatus;
                 ws.Cell(row, 7).Value = b.ErrorDetail;
-                ws.Cell(row, 8).Value = b.AEConsumerRequestID?.ToString() ?? string.Empty;
+                ws.Cell(row, 8).Value = b.AEConsumerRequestID?.ToString() ?? "";
                 ws.Cell(row, 9).Value = b.AETransactionDate;
                 ws.Cell(row, 10).Value = b.AEJournalName;
                 ws.Cell(row, 11).Value = b.AEJournalDescription;
@@ -208,9 +208,12 @@ namespace CAHFS_Recharges.Pages.Staging
         }
 
 
+        /* ============================================================
+           GET PAGE – LOAD BATCHES + ITEMS
+        ============================================================ */
         public async Task OnGetAsync()
         {
-            // ----- 1) Get batches with filters -----
+            // Batches
             var batchQuery = _context.FeedBatches.AsQueryable();
 
             if (FromDate.HasValue)
@@ -229,31 +232,29 @@ namespace CAHFS_Recharges.Pages.Staging
 
             if (!string.IsNullOrWhiteSpace(Status))
             {
-                var s = Status.Trim().ToUpper();
                 batchQuery = batchQuery.Where(b => b.AERequestStatus != null &&
-                                                   b.AERequestStatus.ToUpper() == s);
+                                                   b.AERequestStatus.ToUpper() == Status.ToUpper());
             }
 
             if (!string.IsNullOrWhiteSpace(JournalName))
             {
-                var j = JournalName.Trim();
-                batchQuery = batchQuery.Where(b => b.AEJournalName != null &&
-                                                   b.AEJournalName.Contains(j));
+                batchQuery = batchQuery.Where(b =>
+                    b.AEJournalName.Contains(JournalName));
             }
 
-            batchQuery = batchQuery
+            Batches = await batchQuery
                 .OrderByDescending(b => b.AETransactionDate ?? b.DateSent)
-                .ThenByDescending(b => b.BatchID);
+                .ThenByDescending(b => b.BatchID)
+                .Take(200)
+                .ToListAsync();
 
-            Batches = await batchQuery.Take(200).ToListAsync();
-
-            // Default selected batch = first row if none specified
+            // Default batch
             if (!SelectedBatchId.HasValue && Batches.Any())
             {
                 SelectedBatchId = Batches.First().BatchID;
             }
 
-            // ----- 2) Get items for selected batch -----
+            // Items
             if (SelectedBatchId.HasValue)
             {
                 Items = await _context.FeedItems

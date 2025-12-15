@@ -52,5 +52,8 @@ namespace CAHFS_Recharges.Models
 
         [Column("CreditStringValid")]
         public string? CreditStringValid { get; set; }
+        [Column("UnprocessedCOAString")]
+        public string? UnprocessedCOAString { get; set; }
+
     }
 }

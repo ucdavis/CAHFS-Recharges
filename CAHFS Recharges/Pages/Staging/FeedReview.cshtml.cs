@@ -78,6 +78,7 @@ namespace CAHFS_Recharges.Pages.Staging
             ws.Cell(row, 12).Value = "CreditStringValid";
             ws.Cell(row, 13).Value = "TestCode";
             ws.Cell(row, 14).Value = "TestName";
+            ws.Cell(row, 14).Value = "UnprocessedCOAString";
 
             row++;
 
@@ -97,6 +98,7 @@ namespace CAHFS_Recharges.Pages.Staging
                 ws.Cell(row, 12).Value = i.CreditStringValid;
                 ws.Cell(row, 13).Value = i.TestCode;
                 ws.Cell(row, 14).Value = i.TestName;
+                ws.Cell(row, 14).Value = i.UnprocessedCOAString ?? string.Empty;
 
                 row++;
             }

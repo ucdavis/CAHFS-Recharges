@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.EntityFrameworkCore;
 using NLog;
 using NLog.Web;
 using Polly;
@@ -154,6 +155,10 @@ try
 
     builder.Services.AddDbContext<FinancialContext>();
     builder.Services.AddDbContext<StarLIMSContext>();
+    builder.Services.AddDbContext<EquineFinancialContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("EquineFinancialDb")));
+
 
     // Add Data Protection services (i.e. encryption)
     builder.Services.AddDataProtection();

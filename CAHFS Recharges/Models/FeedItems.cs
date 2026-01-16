@@ -55,5 +55,11 @@ namespace CAHFS_Recharges.Models
         [Column("UnprocessedCOAString")]
         public string? UnprocessedCOAString { get; set; }
 
+        [Column("DebitValidationError")]
+        public string? DebitValidationError { get; set; }
+        [Column("CreditValidationError")]
+        public string? CreditValidationError { get; set; }
+
+
     }
 }

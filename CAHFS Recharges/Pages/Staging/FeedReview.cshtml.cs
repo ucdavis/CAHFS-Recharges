@@ -9,20 +9,46 @@ using CAHFS_Recharges.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using System.Text;
+using CAHFS_Recharges.Services;
+using CAHFS.GraphQl;
 
 namespace CAHFS_Recharges.Pages.Staging
 {
     public class FeedReviewModel : PageModel
     {
         private readonly FinancialContext _context;
+        private readonly StagingCoaValidationService _coaValidator;
+        private readonly IAggieEnterpriseClient _ae;
 
-        public FeedReviewModel(FinancialContext context)
+        public FeedReviewModel(FinancialContext context, StagingCoaValidationService coaValidator, IAggieEnterpriseClient ae)
         {
             _context = context;
+            _coaValidator = coaValidator;
+            _ae = ae;
         }
 
-        // Filters
+        // =======================
+        // TempData
+        // =======================
+        [TempData]
+        public string? ValidationMessage { get; set; }
+
+        // =======================
+        // AE Details - querystring
+        // =======================
+        [BindProperty(SupportsGet = true)]
+        public Guid? DetailRecordId { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public string? DetailSide { get; set; } // "D" or "C"
+
+        public IGlValidateChartstringResult? AeDetailData { get; set; }
+        public string? AeDetailError { get; set; }
+        public string? AeDetailInputCoa { get; set; }
+
+        // =======================
+        // Filters - querystring
+        // =======================
         [BindProperty(SupportsGet = true)]
         public DateTime? FromDate { get; set; }
 
@@ -35,25 +61,54 @@ namespace CAHFS_Recharges.Pages.Staging
         [BindProperty(SupportsGet = true)]
         public string? JournalName { get; set; }
 
-        // Selected batch
+        // Selected batch - querystring
         [BindProperty(SupportsGet = true)]
         public Guid? SelectedBatchId { get; set; }
+
+        // Show only invalid items for selected batch (Debit OR Credit)
+        [BindProperty(SupportsGet = true)]
+        public bool ShowInvalidOnly { get; set; } = false;
+
+        public string? SelectedBatchJournalName { get; set; }
 
         public IList<FeedBatch> Batches { get; set; } = new List<FeedBatch>();
         public IList<FeedItem> Items { get; set; } = new List<FeedItem>();
 
-        /* ============================================================
-           DOWNLOAD ITEMS EXCEL
-        ============================================================ */
+        // ============================================================
+        // POST: Validate pending COA
+        // ============================================================
+        public async Task<IActionResult> OnPostValidatePendingAsync()
+        {
+            var updated = await _coaValidator.ValidatePendingItemsAsync();
+            ValidationMessage = $"COA Validation completed. Rows updated: {updated}";
+
+            // Keep user on same batch after POST
+            return RedirectToPage(new
+            {
+                FromDate = FromDate?.ToString("yyyy-MM-dd"),
+                ToDate = ToDate?.ToString("yyyy-MM-dd"),
+                Status,
+                JournalName,
+                SelectedBatchId
+            });
+        }
+
+        // ============================================================
+        // GET: Download Items Excel OR Invali Only Records based on the conditions
+        // ============================================================
         public async Task<IActionResult> OnGetDownloadItemsAsync()
         {
             if (!SelectedBatchId.HasValue)
-            {
                 return RedirectToPage();
+
+            var q = _context.FeedItems.Where(i => i.BatchID == SelectedBatchId.Value);
+
+            if (ShowInvalidOnly)
+            {
+                q = q.Where(i => i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid");
             }
 
-            var items = await _context.FeedItems
-                .Where(i => i.BatchID == SelectedBatchId.Value)
+            var items = await q
                 .OrderBy(i => i.TransactionDate)
                 .ThenBy(i => i.RecordID)
                 .ToListAsync();
@@ -63,7 +118,6 @@ namespace CAHFS_Recharges.Pages.Staging
 
             int row = 1;
 
-            // NEW HEADER
             ws.Cell(row, 1).Value = "RecordID";
             ws.Cell(row, 2).Value = "OriginalDocNumber";
             ws.Cell(row, 3).Value = "DebitChartString";
@@ -78,12 +132,16 @@ namespace CAHFS_Recharges.Pages.Staging
             ws.Cell(row, 12).Value = "CreditStringValid";
             ws.Cell(row, 13).Value = "TestCode";
             ws.Cell(row, 14).Value = "TestName";
-            ws.Cell(row, 14).Value = "UnprocessedCOAString";
-
+            ws.Cell(row, 15).Value = "UnprocessedCOAString";
+            ws.Cell(row, 16).Value = "AE_Details";
             row++;
 
             foreach (var i in items)
             {
+                var aeDetails =
+                    $"D: {(string.IsNullOrWhiteSpace(i.DebitValidationError) ? "-" : i.DebitValidationError)} | " +
+                    $"C: {(string.IsNullOrWhiteSpace(i.CreditValidationError) ? "-" : i.CreditValidationError)}";
+
                 ws.Cell(row, 1).Value = i.RecordID.ToString();
                 ws.Cell(row, 2).Value = i.OrignalDocNumber;
                 ws.Cell(row, 3).Value = i.DebitChartString;
@@ -98,7 +156,8 @@ namespace CAHFS_Recharges.Pages.Staging
                 ws.Cell(row, 12).Value = i.CreditStringValid;
                 ws.Cell(row, 13).Value = i.TestCode;
                 ws.Cell(row, 14).Value = i.TestName;
-                ws.Cell(row, 14).Value = i.UnprocessedCOAString ?? string.Empty;
+                ws.Cell(row, 15).Value = i.UnprocessedCOAString ?? "";
+                ws.Cell(row, 16).Value = aeDetails;
 
                 row++;
             }
@@ -109,7 +168,8 @@ namespace CAHFS_Recharges.Pages.Staging
             wb.SaveAs(stream);
             stream.Position = 0;
 
-            var fileName = $"AE_Feed_Items_{SelectedBatchId.Value}_{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx";
+            var suffix = ShowInvalidOnly ? "_INVALID_ONLY" : "";
+            var fileName = $"AE_Feed_Items_{SelectedBatchId.Value}{suffix}_{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx";
 
             return File(stream.ToArray(),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -117,9 +177,9 @@ namespace CAHFS_Recharges.Pages.Staging
         }
 
 
-        /* ============================================================
-           DOWNLOAD BATCHES EXCEL
-        ============================================================ */
+        // ============================================================
+        // GET: Download Batches Excel
+        // ============================================================
         public async Task<IActionResult> OnGetDownloadBatchesAsync()
         {
             var query = _context.FeedBatches.AsQueryable();
@@ -209,39 +269,41 @@ namespace CAHFS_Recharges.Pages.Staging
                 fileName);
         }
 
-
-        /* ============================================================
-           GET PAGE – LOAD BATCHES + ITEMS
-        ============================================================ */
+        // ============================================================
+        // GET: Load batches + items + AE details (if requested)
+        // ============================================================
         public async Task OnGetAsync()
         {
-            // Batches
+            // clear AE detail state every load
+            AeDetailData = null;
+            AeDetailError = null;
+            AeDetailInputCoa = null;
+
+            // ---- Load Batches
             var batchQuery = _context.FeedBatches.AsQueryable();
 
             if (FromDate.HasValue)
             {
                 var from = FromDate.Value.Date;
-                batchQuery = batchQuery.Where(b =>
-                    (b.AETransactionDate ?? b.DateSent) >= from);
+                batchQuery = batchQuery.Where(b => (b.AETransactionDate ?? b.DateSent) >= from);
             }
 
             if (ToDate.HasValue)
             {
                 var to = ToDate.Value.Date.AddDays(1);
-                batchQuery = batchQuery.Where(b =>
-                    (b.AETransactionDate ?? b.DateSent) < to);
+                batchQuery = batchQuery.Where(b => (b.AETransactionDate ?? b.DateSent) < to);
             }
 
             if (!string.IsNullOrWhiteSpace(Status))
             {
-                batchQuery = batchQuery.Where(b => b.AERequestStatus != null &&
-                                                   b.AERequestStatus.ToUpper() == Status.ToUpper());
+                var s = Status.Trim().ToUpper();
+                batchQuery = batchQuery.Where(b => b.AERequestStatus != null && b.AERequestStatus.ToUpper() == s);
             }
 
             if (!string.IsNullOrWhiteSpace(JournalName))
             {
-                batchQuery = batchQuery.Where(b =>
-                    b.AEJournalName.Contains(JournalName));
+                var j = JournalName.Trim();
+                batchQuery = batchQuery.Where(b => b.AEJournalName.Contains(j));
             }
 
             Batches = await batchQuery
@@ -250,20 +312,60 @@ namespace CAHFS_Recharges.Pages.Staging
                 .Take(200)
                 .ToListAsync();
 
-            // Default batch
+            // ---- Default Selected Batch
             if (!SelectedBatchId.HasValue && Batches.Any())
-            {
                 SelectedBatchId = Batches.First().BatchID;
-            }
 
-            // Items
+            // ---- Load Items for selected batch
             if (SelectedBatchId.HasValue)
             {
-                Items = await _context.FeedItems
-                    .Where(i => i.BatchID == SelectedBatchId.Value)
+                // set selected batch journal name for header
+                var selectedBatch = Batches.FirstOrDefault(b => b.BatchID == SelectedBatchId.Value);
+                SelectedBatchJournalName = selectedBatch?.AEJournalName;
+
+                var itemsQuery = _context.FeedItems
+                    .Where(i => i.BatchID == SelectedBatchId.Value);
+
+                if (ShowInvalidOnly)
+                {
+                    itemsQuery = itemsQuery.Where(i =>
+                        i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid");
+                }
+
+                Items = await itemsQuery
                     .OrderBy(i => i.TransactionDate)
                     .ThenBy(i => i.RecordID)
                     .ToListAsync();
+            }
+
+
+            // ---- Load AE details when user clicks "Debit/Credit"
+            if (SelectedBatchId.HasValue && DetailRecordId.HasValue && !string.IsNullOrWhiteSpace(DetailSide))
+            {
+                var item = Items.FirstOrDefault(x => x.RecordID == DetailRecordId.Value);
+                if (item == null)
+                {
+                    AeDetailError = "Item not found in current batch items.";
+                    return;
+                }
+
+                AeDetailInputCoa = DetailSide == "D" ? item.DebitChartString : item.CreditChartString;
+
+                if (string.IsNullOrWhiteSpace(AeDetailInputCoa))
+                {
+                    AeDetailError = "Selected COA is empty.";
+                    return;
+                }
+
+                var op = await _ae.GlValidateChartstring.ExecuteAsync(AeDetailInputCoa, true);
+
+                if (op.Errors?.Any() == true)
+                    AeDetailError = string.Join(" | ", op.Errors.Select(e => e.Message));
+
+                AeDetailData = op.Data;
+
+                if (AeDetailData == null && string.IsNullOrWhiteSpace(AeDetailError))
+                    AeDetailError = "AE returned no data.";
             }
         }
     }

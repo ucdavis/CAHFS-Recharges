@@ -1,0 +1,31 @@
+query erpValidateChartstring($segmentString: String!, $validateCVRs: Boolean, $accountingDate: LocalDate) {
+  erpValidateChartstring(segmentString: $segmentString, validateCVRs: $validateCVRs, accountingDate: $accountingDate) {
+    validationResponse {
+      valid
+      errorMessages
+      messageProperties
+    }
+    chartstring
+    segments {
+      entity
+      fund
+      department
+      account
+      purpose
+      project
+      program
+      activity
+    }
+    ppmSegments {
+      project
+      task
+      organization
+      expenditureType
+      award
+      fundingSource
+    }
+    codeCombinationId
+    warnings { segmentName warning }
+    endDates { segmentName endDate }
+  }
+}

@@ -1,0 +1,205 @@
+﻿@page
+@model CAHFS_Recharges.Pages.Staging.SendToAggieEnterpriseModel
+@{
+    ViewData["Title"] = "Staging – Send To Aggie Enterprise";
+}
+
+<h1>Staging – Send To Aggie Enterprise</h1>
+<p class="text-muted">
+    Manual build/preview/send for a selected batch. This page enforces gatekeeping:
+    batch must be <strong>Ready</strong> and all items must be <strong>Valid</strong>.
+</p>
+
+@if (!string.IsNullOrWhiteSpace(Model.PageMessage))
+{
+    <div class="alert alert-info">@Model.PageMessage</div>
+}
+
+<form method="get" class="mb-3" asp-page="./SendToAggieEnterprise">
+    <div class="row">
+        <div class="col-md-2">
+            <label asp-for="FromDate" class="form-label">From date</label>
+            <input asp-for="FromDate" class="form-control" type="date" />
+        </div>
+        <div class="col-md-2">
+            <label asp-for="ToDate" class="form-label">To date</label>
+            <input asp-for="ToDate" class="form-control" type="date" />
+        </div>
+        <div class="col-md-2">
+            <label asp-for="Status" class="form-label">Status</label>
+            <input asp-for="Status" class="form-control" placeholder="Ready / Needs Review / Pending / Error" />
+        </div>
+        <div class="col-md-3">
+            <label asp-for="JournalName" class="form-label">Journal name</label>
+            <input asp-for="JournalName" class="form-control" />
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary me-2">Apply filters</button>
+            <a asp-page="./SendToAggieEnterprise" class="btn btn-secondary">Clear</a>
+        </div>
+    </div>
+</form>
+
+@if (!Model.Batches.Any())
+{
+    <p><em>No batches found for the selected filters.</em></p>
+}
+else
+{
+    <form method="get" class="mb-3" asp-page="./SendToAggieEnterprise" id="batchSelectForm">
+        <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+        <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+        <input type="hidden" name="Status" value="@Model.Status" />
+        <input type="hidden" name="JournalName" value="@Model.JournalName" />
+
+        <div class="row">
+            <div class="col-md-8">
+                <label class="form-label">Select batch</label>
+                <select class="form-select" name="SelectedBatchId" id="batchSelect">
+                    <option value="" selected="@(!Model.SelectedBatchId.HasValue)">-- Select a batch --</option>
+
+                    @foreach (var b in Model.Batches)
+                    {
+                        <option value="@b.BatchID" selected="@(Model.SelectedBatchId == b.BatchID)">
+                            @b.AEJournalName (@b.BatchID) —> Status: @b.AERequestStatus
+                        </option>
+                    }
+                </select>
+
+                @*<div class="text-muted small mt-1">
+                    Selecting a batch will automatically refresh the summary.
+                </div> *@
+            </div>
+        </div>
+    </form>
+}
+
+@if (Model.SelectedBatch != null)
+{
+    <hr />
+
+    <h3>Batch Summary</h3>
+
+    <div class="row">
+        <div class="col-md-8">
+            <table class="table table-sm">
+                <tr>
+                    <th style="width:220px;">Batch ID</th>
+                    <td>@Model.SelectedBatch.BatchID</td>
+                </tr>
+                <tr>
+                    <th>Journal Name</th>
+                    <td>@Model.SelectedBatch.AEJournalName</td>
+                </tr>
+                <tr>
+                    <th>Journal Reference</th>
+                    <td>@Model.SelectedBatch.AEJournalReference</td>
+                </tr>
+                <tr>
+                    <th>Accounting Date</th>
+                    <td>@(Model.AccountingDateText ?? "-")</td>
+                </tr>
+                <tr>
+                    <th>Accounting Period</th>
+                    <td>@(Model.AccountingPeriodText ?? "-")</td>
+                </tr>
+                <tr>
+                    <th>Batch Total</th>
+                    <td>@(Model.SelectedBatch.BatchTotal?.ToString("N2") ?? "-")</td>
+                </tr>
+                <tr>
+                    <th>AE Status</th>
+                    <td>
+                        <strong>@(Model.SelectedBatch.AERequestStatus ?? "-")</strong>
+                        @if (Model.SelectedBatch.AEConsumerRequestID.HasValue)
+                        {
+                            <span class="text-muted"> | RequestId: @Model.SelectedBatch.AEConsumerRequestID</span>
+                        }
+                    </td>
+                </tr>
+                <tr>
+                    <th>Error Detail</th>
+                    <td style="white-space:pre-wrap;">@(Model.SelectedBatch.ErrorDetail ?? "-")</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="col-md-4">
+            <h5>Gatekeeping</h5>
+            <div class="alert @(Model.GateCanSend ? "alert-success" : "alert-warning")">
+                <div><strong>@(Model.GateCanSend ? "OK to Send" : "Blocked")</strong></div>
+                <div class="mt-1">@Model.GateMessage</div>
+
+                @if (Model.GateSummary != null)
+                {
+                    <div class="mt-2 small text-muted">
+                        Total: @Model.GateSummary.TotalItems |
+                        Pending: @Model.GateSummary.PendingCount |
+                        Invalid: @Model.GateSummary.InvalidCount |
+                        NotValid: @Model.GateSummary.NotValidCount |
+                        BatchStatus: @Model.GateSummary.BatchStatus
+                    </div>
+                }
+            </div>
+
+            <form method="post" asp-page-handler="BuildPreview" class="mb-2">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
+                <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+                <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+                <input type="hidden" name="Status" value="@Model.Status" />
+                <input type="hidden" name="JournalName" value="@Model.JournalName" />
+                <button type="submit" class="btn btn-outline-primary w-100">Build Preview</button>
+            </form>
+
+            <form method="post" asp-page-handler="SendToAe" class="mb-2">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
+                <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+                <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+                <input type="hidden" name="Status" value="@Model.Status" />
+                <input type="hidden" name="JournalName" value="@Model.JournalName" />
+                <button type="submit" class="btn btn-success w-100" disabled="@(!Model.GateCanSend)">
+                    Send to AE
+                </button>
+            </form>
+
+            <form method="post" asp-page-handler="RefreshStatus" class="mb-2">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
+                <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+                <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+                <input type="hidden" name="Status" value="@Model.Status" />
+                <input type="hidden" name="JournalName" value="@Model.JournalName" />
+                <button type="submit" class="btn btn-outline-secondary w-100">Refresh Status</button>
+            </form>
+
+            <a class="btn btn-outline-dark w-100"
+               asp-page-handler="DownloadPayload"
+               asp-route-SelectedBatchId="@Model.SelectedBatchId"
+               asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+               asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+               asp-route-Status="@Model.Status"
+               asp-route-JournalName="@Model.JournalName">
+                Download Payload (JSON)
+            </a>
+        </div>
+    </div>
+
+    @if (Model.Preview != null)
+    {
+        <hr />
+        <h3>Build Preview</h3>
+        <div class="alert alert-light border">
+            <div><strong>Items:</strong> @Model.Preview.ItemCount</div>
+            <div><strong>Journal Lines:</strong> @Model.Preview.JournalLineCount</div>
+            <div><strong>Debit Total:</strong> @Model.Preview.DebitTotal.ToString("N2")</div>
+            <div><strong>Credit Total:</strong> @Model.Preview.CreditTotal.ToString("N2")</div>
+            <div><strong>Balanced:</strong> @(Model.Preview.IsBalanced ? "Yes" : "No")</div>
+        </div>
+    }
+}
+
+@section Scripts {
+    <script src="~/js/send-to-ae-batch-select.js"></script>
+}

@@ -1,0 +1,67 @@
+mutation glJournalRequest($data: GlJournalRequestInput!) {
+  glJournalRequest(data: $data) {
+    requestStatus {
+      requestId
+      consumerId
+      consumerTrackingId
+      consumerReferenceId
+      consumerNotes
+      boundaryApplicationName
+      operationName
+      requestDateTime
+      requestStatus
+      lastStatusDateTime
+      processedDateTime
+      errorMessages
+      batchRequest
+      batchId
+
+      resultValues {
+        valuesExtracted
+        jobs {
+          jobType
+          values {
+            name
+            value
+          }
+        }
+      }
+    }
+
+    processingResult {
+      status
+      requestDateTime
+      lastStatusCheckDateTime
+      processedDateTime
+      errorMessages
+      hasWarnings
+
+      jobs {
+        jobId
+        jobStatus
+        assignedJobId
+        completedDateTime
+        failedRecords
+        jobReport
+      }
+
+      checkpoints {
+        pipelineId
+        checkpointId
+        checkpointType
+        checkpointDateTime
+      }
+    }
+
+    validationResults {
+      valid
+      errorMessages
+      messageProperties
+    }
+
+    validationWarnings {
+      segmentName
+      warning
+    }
+  }
+}

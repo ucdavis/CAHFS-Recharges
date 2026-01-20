@@ -202,6 +202,16 @@ try
         });
 
 
+    // COA Validation
+    builder.Services.AddScoped<CAHFS_Recharges.Services.StagingCoaValidationService>();
+
+    // Ready to Send service
+    builder.Services.AddScoped<AggieEnterpriseSendGatekeeper>();
+
+   // Journal creation and Upload service 
+    builder.Services.AddScoped<AggieEnterpriseJournalUploadService>();
+
+
     var app = builder.Build();
 
     // Add Content Security Policy

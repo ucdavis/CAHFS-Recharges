@@ -1,4 +1,5 @@
 @page
+@using System
 @model CAHFS_Recharges.Pages.Staging.FeedReviewModel
 @{
     ViewData["Title"] = "Staging – Feed Batches & Items";
@@ -9,6 +10,21 @@
     This view shows data from <strong>C_AE_Feed_Batch</strong> and
     <strong>C_AE_Feed_Items</strong> to help validate the staging tables.
 </p>
+
+<form method="post" asp-page-handler="ValidatePending" style="margin-bottom:10px;">
+    <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
+    <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+    <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+    <input type="hidden" name="Status" value="@Model.Status" />
+    <input type="hidden" name="JournalName" value="@Model.JournalName" />
+    <button type="submit" class="btn btn-primary">Validate Pending COA</button>
+</form>
+
+
+@if (!string.IsNullOrWhiteSpace(Model.ValidationMessage))
+{
+    <div class="alert alert-info">@Model.ValidationMessage</div>
+}
 
 <form method="get" class="mb-3">
     <div class="row">
@@ -22,7 +38,7 @@
         </div>
         <div class="col-md-2">
             <label asp-for="Status" class="form-label">Status</label>
-            <input asp-for="Status" class="form-control" placeholder="SUCCESS / ERROR" />
+            <input asp-for="Status" class="form-control" placeholder="SUCCESS / ERROR / Needs Review / Ready" />
         </div>
         <div class="col-md-3">
             <label asp-for="JournalName" class="form-label">Journal name</label>
@@ -37,145 +53,341 @@
 
 @if (!Model.Batches.Any())
 {
-<p><em>No batches found for the selected filters.</em></p>
+    <p><em>No batches found for the selected filters.</em></p>
 }
 else
 {
-<div class="d-flex justify-content-between align-items-center mb-2">
-    <p class="mb-0">Showing @Model.Batches.Count batch(es) (max 200).</p>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <p class="mb-0">Showing @Model.Batches.Count batch(es) (max 200).</p>
 
-    <div>
-        <a class="btn btn-primary btn-sm"
-           asp-page-handler="DownloadBatches"
-           asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
-           asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
-           asp-route-Status="@Model.Status"
-           asp-route-JournalName="@Model.JournalName">
-            Download Batch
-        </a>
+        <div>
+            <a class="btn btn-primary btn-sm"
+               asp-page-handler="DownloadBatches"
+               asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+               asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+               asp-route-Status="@Model.Status"
+               asp-route-JournalName="@Model.JournalName">
+                Download Batch
+            </a>
+        </div>
     </div>
-</div>
 
-<h3>Batches (C_AE_Feed_Batch)</h3>
+    <h3>Batches</h3>
 
-<div class="table-scroll-container mt-2">
-    <table class="table table-striped table-sm mb-0">
-        <thead>
-            <tr>
-                <th></th>
-                <th>Batch ID</th>
-                <th>Txn Date</th>
-                <th>Date Sent</th>
-                <th>Status</th>
-                <th>Journal Name</th>
-                <th>Journal Ref</th>
-                <th>Batch Total</th>
-                <th>Error Detail</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var b in Model.Batches)
+    <div class="table-scroll-container mt-2">
+        <table class="table table-striped table-sm mb-0">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Batch ID</th>
+                    <th>Txn Date</th>
+                    <th>Date Sent</th>
+                    <th>Status</th>
+                    <th>Journal Name</th>
+                    <th>Journal Ref</th>
+                    <th>Batch Total</th>
+                    <th>Error Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in Model.Batches)
                 {
                     var isSelected = Model.SelectedBatchId.HasValue && Model.SelectedBatchId.Value == b.BatchID;
-            <tr class="@(isSelected ? "table-primary" : "")">
-                <td>
-                    <a asp-page="./FeedReview"
-                       asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
-                       asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
-                       asp-route-Status="@Model.Status"
-                       asp-route-JournalName="@Model.JournalName"
-                       asp-route-SelectedBatchId="@b.BatchID">
-                        View items
-                    </a>
-                </td>
-                <td>@b.BatchID</td>
-                <td>@(b.AETransactionDate?.ToString("yyyy-MM-dd") ?? "")</td>
-                <td>@(b.DateSent?.ToString("yyyy-MM-dd") ?? "")</td>
-                <td>@b.AERequestStatus</td>
-                <td>@b.AEJournalName</td>
-                <td>@b.AEJournalReference</td>
-                <td>@(b.BatchTotal?.ToString("N2"))</td>
-                <td>@b.ErrorDetail</td>
-            </tr>
+                    <tr class="@(isSelected ? "table-primary" : "")">
+                        <td>
+                            <a asp-page="./FeedReview"
+                               asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                               asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                               asp-route-Status="@Model.Status"
+                               asp-route-JournalName="@Model.JournalName"
+                               asp-route-SelectedBatchId="@b.BatchID">
+                                View items
+                            </a>
+                        </td>
+                        <td>@b.BatchID</td>
+                        <td>@(b.AETransactionDate?.ToString("yyyy-MM-dd") ?? "")</td>
+                        <td>@(b.DateSent?.ToString("yyyy-MM-dd") ?? "")</td>
+                        <td>@b.AERequestStatus</td>
+                        <td>@b.AEJournalName</td>
+                        <td>@b.AEJournalReference</td>
+                        <td>@(b.BatchTotal?.ToString("N2"))</td>
+                        <td>@b.ErrorDetail</td>
+                    </tr>
                 }
-        </tbody>
-    </table>
-</div>
+            </tbody>
+        </table>
+    </div>
 }
 
 <h3 class="mt-4">
-    Items (C_AE_Feed_Items)
+    Items
     @if (Model.SelectedBatchId.HasValue)
     {
-    <small class="text-muted">for Batch @Model.SelectedBatchId</small>
+        <small class="text-muted">
+            for 
+            @if (!string.IsNullOrWhiteSpace(Model.SelectedBatchJournalName))
+            {
+                <span> Journal: @Model.SelectedBatchJournalName</span>
+            }
+        </small>
     }
 </h3>
 
+@*Show Invalid COA Button.*@
 @if (Model.SelectedBatchId.HasValue && Model.Items.Any())
 {
-<div class="d-flex justify-content-end mb-2">
-    <a class="btn btn-primary btn-sm"
-       asp-page-handler="DownloadItems"
-       asp-route-SelectedBatchId="@Model.SelectedBatchId"
-       asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
-       asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
-       asp-route-Status="@Model.Status"
-       asp-route-JournalName="@Model.JournalName">
-        Download Items
-    </a>
-</div>
+    <div class="d-flex justify-content-end mb-2">
+
+        @* Toggle button *@
+        @if (!Model.ShowInvalidOnly)
+        {
+            <a class="btn btn-warning btn-sm me-2"
+               asp-page="./FeedReview"
+               asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+               asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+               asp-route-Status="@Model.Status"
+               asp-route-JournalName="@Model.JournalName"
+               asp-route-SelectedBatchId="@Model.SelectedBatchId"
+               asp-route-ShowInvalidOnly="true">
+                Show Invalid COA
+            </a>
+        }
+        else
+        {
+            <a class="btn btn-secondary btn-sm me-2"
+               asp-page="./FeedReview"
+               asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+               asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+               asp-route-Status="@Model.Status"
+               asp-route-JournalName="@Model.JournalName"
+               asp-route-SelectedBatchId="@Model.SelectedBatchId">
+                Back to All Items
+            </a>
+        }
+
+        @* Download respects filter *@
+        <a class="btn btn-primary btn-sm"
+           asp-page-handler="DownloadItems"
+           asp-route-SelectedBatchId="@Model.SelectedBatchId"
+           asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+           asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+           asp-route-Status="@Model.Status"
+           asp-route-JournalName="@Model.JournalName"
+           asp-route-ShowInvalidOnly="@Model.ShowInvalidOnly">
+            Download Items
+        </a>
+    </div>
 }
+
 
 @if (!Model.Items.Any())
 {
-<p><em>No items for this batch.</em></p>
+    <p><em>No items for this batch.</em></p>
 }
 else
 {
-<div class="table-scroll-container mt-2">
-    <table class="table table-bordered table-sm mb-0">
-        <thead>
-            <tr>
-                <th>Record ID</th>
-                <th>Original Doc #</th>
-                <th>Debit Chart</th>
-                <th>Credit Chart</th>
-                <th>Txn Date</th>
-                <th>Qty</th>
-                <th>Unit Price</th>
-                <th>Total Charge</th>
-                <th>Client ID</th>
-                <th>System ID</th>
-                <th>Debit Valid?</th>
-                <th>Credit Valid?</th>
-                <th>Test Code</th>
-                <th>Test Name</th>
-                <th>Unprocessed COA (StarLIMS)</th>
-            </tr>
-        </thead>
+    @* ===== AE DETAILS PANEL: show if data OR error exists (single record drill-down) ===== *@
+    @if (Model.AeDetailData != null || !string.IsNullOrWhiteSpace(Model.AeDetailError))
+    {
+        <div class="alert alert-warning">
+            <div><strong>AE Details (Drill-down)</strong></div>
+            <div class="mt-1"><strong>Record:</strong> @Model.DetailRecordId | <strong>Side:</strong> @Model.DetailSide</div>
+            <div><strong>Input COA:</strong> @Model.AeDetailInputCoa</div>
 
-        <tbody>
-            @foreach (var i in Model.Items)
+            @if (!string.IsNullOrWhiteSpace(Model.AeDetailError))
+            {
+                <div class="mt-1"><strong>GraphQL Errors:</strong> @Model.AeDetailError</div>
+            }
+
+            @if (Model.AeDetailData != null)
+            {
+                var d = Model.AeDetailData.GlValidateChartstring;
+
+                <div class="mt-1"><strong>AE Valid:</strong> @d.ValidationResponse.Valid</div>
+
+                @if (d.ValidationResponse.ErrorMessages != null && d.ValidationResponse.ErrorMessages.Any())
                 {
-            <tr>
-                <td>@i.RecordID</td>
-                <td>@i.OrignalDocNumber</td>
-                <td>@i.DebitChartString</td>
-                <td>@i.CreditChartString</td>
-                <td>@(i.TransactionDate == default ? "" : i.TransactionDate.ToString("yyyy-MM-dd"))</td>
-                <td>@i.Quantity</td>
-                <td>@(i.UnitPrice?.ToString("N2"))</td>
-                <td>@i.TotalCharge.ToString("N2")</td>
-                <td>@i.ClientID</td>
-                <td>@i.SystemID</td>
-                <td>@i.DebitStringValid</td>
-                <td>@i.CreditStringValid</td>
-                <td>@i.TestCode</td>
-                <td>@i.TestName</td>
-                <td>@i.UnprocessedCOAString</td>
-            </tr>
+                    <div class="mt-2"><strong>Error Messages:</strong></div>
+                    <ul>
+                        @foreach (var e in d.ValidationResponse.ErrorMessages)
+                        {
+                            <li>@e</li>
+                        }
+                    </ul>
                 }
-        </tbody>
-    </table>
-</div>
+
+                <div class="mt-2"><strong>Complete Chartstring:</strong> @d.CompleteChartstring</div>
+
+                @if (d.Segments != null)
+                {
+                    <div class="mt-2"><strong>Segments:</strong></div>
+                    <div>
+                        Entity: @d.Segments.Entity |
+                        Fund: @d.Segments.Fund |
+                        Dept: @d.Segments.Department |
+                        Account: @d.Segments.Account |
+                        Purpose: @d.Segments.Purpose |
+                        Project: @d.Segments.Project |
+                        Program: @d.Segments.Program |
+                        Activity: @d.Segments.Activity
+                    </div>
+                }
+
+                @if (d.Warnings != null && d.Warnings.Any())
+                {
+                    <div class="mt-2"><strong>Warnings:</strong></div>
+                    <ul>
+                        @foreach (var w in d.Warnings)
+                        {
+                            <li>@w.SegmentName : @w.Warning</li>
+                        }
+                    </ul>
+                }
+
+                @if (d.EndDates != null && d.EndDates.Any())
+                {
+                    <div class="mt-2"><strong>End Dates:</strong></div>
+                    <ul>
+                        @foreach (var ed in d.EndDates)
+                        {
+                            <li>@ed.SegmentName : @ed.EndDate</li>
+                        }
+                    </ul>
+                }
+            }
+
+            <div class="mt-2">
+                <a class="btn btn-sm btn-secondary"
+                   asp-page="./FeedReview"
+                   asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                   asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                   asp-route-Status="@Model.Status"
+                   asp-route-JournalName="@Model.JournalName"
+                   asp-route-SelectedBatchId="@Model.SelectedBatchId">
+                    Clear AE Details
+                </a>
+            </div>
+        </div>
+    }
+
+    <div class="table-scroll-container mt-2">
+        <table class="table table-bordered table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Record ID</th>
+                    <th>Original Doc #</th>
+                    <th>Debit Chart</th>
+                    <th>Credit Chart</th>
+                    <th>Txn Date</th>
+                    <th>Qty</th>
+                    <th>Unit Price</th>
+                    <th>Total Charge</th>
+                    <th>Client ID</th>
+                    <th>System ID</th>
+                    <th>Debit Valid?</th>
+                    <th>Credit Valid?</th>
+                    <th>Test Code</th>
+                    <th>Test Name</th>
+                    <th>Unprocessed COA (StarLIMS)</th>
+                    <th>AE Details</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var i in Model.Items)
+                {
+                    var debitStatus = (i.DebitStringValid ?? "").Trim();
+                    var creditStatus = (i.CreditStringValid ?? "").Trim();
+
+                    var debitInvalid = debitStatus.Equals("Invalid", StringComparison.OrdinalIgnoreCase);
+                    var creditInvalid = creditStatus.Equals("Invalid", StringComparison.OrdinalIgnoreCase);
+
+                    <tr>
+                        <td>@i.RecordID</td>
+                        <td>@i.OrignalDocNumber</td>
+                        <td>@i.DebitChartString</td>
+                        <td>@i.CreditChartString</td>
+                        <td>@(i.TransactionDate == default ? "" : i.TransactionDate.ToString("yyyy-MM-dd"))</td>
+                        <td>@i.Quantity</td>
+                        <td>@(i.UnitPrice?.ToString("N2"))</td>
+                        <td>@i.TotalCharge.ToString("N2")</td>
+                        <td>@i.ClientID</td>
+                        <td>@i.SystemID</td>
+                        <td>@debitStatus</td>
+                        <td>@creditStatus</td>
+                        <td>@i.TestCode</td>
+                        <td>@i.TestName</td>
+                        <td>@i.UnprocessedCOAString</td>
+
+                        <td style="max-width:520px; white-space:normal;">
+                            @* Debit inline error *@
+                            @if (debitInvalid)
+                            {
+                                <div>
+                                    <strong>D:</strong>
+                                    @(!string.IsNullOrWhiteSpace(i.DebitValidationError)
+                                                            ? i.DebitValidationError
+                                                            : "Invalid (no error text)")
+                                </div>
+                            }
+
+                            @* Credit inline error *@
+                            @if (creditInvalid)
+                            {
+                                <div>
+                                    <strong>C:</strong>
+                                    @(!string.IsNullOrWhiteSpace(i.CreditValidationError)
+                                                            ? i.CreditValidationError
+                                                            : "Invalid (no error text)")
+                                </div>
+                            }
+
+                            @* Optional drill-down links *@
+                            <div class="mt-1 small">
+                                @if (debitInvalid && !string.IsNullOrWhiteSpace(i.DebitChartString))
+                                {
+                                    <a asp-page="./FeedReview"
+                                       asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                                       asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                                       asp-route-Status="@Model.Status"
+                                       asp-route-JournalName="@Model.JournalName"
+                                       asp-route-SelectedBatchId="@Model.SelectedBatchId"
+                                       asp-route-DetailRecordId="@i.RecordID"
+                                       asp-route-DetailSide="D">
+                                        Detail Debit
+                                    </a>
+                                }
+
+                                @if (creditInvalid && !string.IsNullOrWhiteSpace(i.CreditChartString))
+                                {
+                                    if (debitInvalid)
+                                    {
+                                        <span> | </span>
+                                    }
+
+                                    <a asp-page="./FeedReview"
+                                       asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                                       asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                                       asp-route-Status="@Model.Status"
+                                       asp-route-JournalName="@Model.JournalName"
+                                       asp-route-SelectedBatchId="@Model.SelectedBatchId"
+                                       asp-route-DetailRecordId="@i.RecordID"
+                                       asp-route-DetailSide="C">
+                                        Detail Credit
+                                    </a>
+                                }
+                            </div>
+
+                            @if (!debitInvalid && !creditInvalid)
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+
+
+        </table>
+    </div>
 }

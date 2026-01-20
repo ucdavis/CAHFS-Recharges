@@ -1,0 +1,37 @@
+query glJournalRequestStatus($requestId: UUID!) {
+  glJournalRequestStatus(requestId: $requestId) {
+    requestStatus {
+      requestId
+      consumerId
+      consumerTrackingId
+      consumerReferenceId
+      consumerNotes
+      boundaryApplicationName
+      operationName
+      requestDateTime
+      requestStatus
+      lastStatusDateTime
+      processedDateTime
+      errorMessages
+      batchRequest
+      batchId
+    }
+    processingResult {
+      status
+      requestDateTime
+      lastStatusCheckDateTime
+      processedDateTime
+      errorMessages
+      hasWarnings
+    }
+    validationResults {
+      valid
+      errorMessages
+      messageProperties
+    }
+    validationWarnings {
+      segmentName
+      warning
+    }
+  }
+}

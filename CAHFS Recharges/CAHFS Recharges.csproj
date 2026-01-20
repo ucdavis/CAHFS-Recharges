@@ -12,6 +12,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <GraphQL Remove="queries\ErpValidateChartstring.graphql" />
+    <GraphQL Remove="queries\glJournalRequest.graphql" />
+    <GraphQL Remove="queries\glJournalRequestStatus.graphql" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="Queries\ErpApiInfo.graphql" />
     <None Remove="Queries\ValidateChartString.graphql" />
   </ItemGroup>

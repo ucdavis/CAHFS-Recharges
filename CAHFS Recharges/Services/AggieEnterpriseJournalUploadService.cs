@@ -37,10 +37,8 @@ namespace CAHFS_Recharges.Services
             _log = log;
         }
 
-        // ============================================================
+        
         // Preview + Download JSON
-        // ============================================================
-
         public async Task<PreviewResult> BuildPreviewAsync(Guid batchId, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
@@ -95,9 +93,7 @@ namespace CAHFS_Recharges.Services
             return JsonSerializer.Serialize(requestInput, jsonOptions);
         }
 
-        // ============================================================
         // Send to AE (Gatekeep + Build + glJournalRequest mutation)
-        // ============================================================
 
         public async Task<SendResult> SendBatchAsync(Guid batchId, CancellationToken ct = default)
         {
@@ -171,9 +167,7 @@ namespace CAHFS_Recharges.Services
             return new SendResult(ok, msg, reqId);
         }
 
-        // ============================================================
         // Poll Status (glJournalRequestStatus query)
-        // ============================================================
 
         public async Task<StatusResult> CheckStatusAsync(Guid batchId, CancellationToken ct = default)
         {
@@ -216,15 +210,14 @@ namespace CAHFS_Recharges.Services
             return new StatusResult(true, $"AE Status: {batch.AERequestStatus}", batch.AEConsumerRequestID);
         }
 
-        // ============================================================
         // Build Request (Header + Payload)
-        // ============================================================
 
         private GlJournalRequestInput BuildRequest(FeedBatch batch, List<FeedItem> items)
         {
             var acctDt = (batch.AETransactionDate ?? batch.DateSent ?? DateTime.UtcNow).Date;
             var accountingDate = DateOnly.FromDateTime(acctDt);
 
+            // Keep your current period format; change later if AE requires different
             var periodName = acctDt.ToString("MMM-yy", CultureInfo.InvariantCulture);
 
             var nowStamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
@@ -244,19 +237,22 @@ namespace CAHFS_Recharges.Services
                 ? $"CAHFS Journal {acctDt:yyyy-MM-dd}"
                 : batch.AEJournalName;
 
+            // journalReference in AE is max 25 chars; your DB column is 50, so enforce 25.
             var journalReference = string.IsNullOrWhiteSpace(batch.AEJournalReference)
                 ? $"CAHFS_{acctDt:yyyyMMdd}"
                 : batch.AEJournalReference;
 
+            journalReference = SafeTrim(journalReference, 25) ?? $"CAHFS_{acctDt:yyyyMMdd}";
+
             var payload = new GlJournalInput
             {
                 AccountingDate = accountingDate,
-                AccountingPeriodName = periodName,
+                AccountingPeriodName = SafeTrim(periodName, 15) ?? periodName,
                 JournalSourceName = JournalSourceName,
                 JournalCategoryName = JournalCategoryName,
-                JournalName = journalName,
+                JournalName = SafeTrim(journalName, 100) ?? journalName,
                 JournalReference = journalReference,
-                JournalDescription = batch.AEJournalDescription ?? journalName,
+                JournalDescription = SafeTrim(batch.AEJournalDescription ?? journalName, 240) ?? (batch.AEJournalDescription ?? journalName),
                 JournalLines = BuildLines(batch, items, acctDt).ToList()
             };
 
@@ -267,49 +263,63 @@ namespace CAHFS_Recharges.Services
             };
         }
 
-        // ============================================================
         // Build Lines (2 per FeedItem: debit + credit)
-        // ============================================================
+        // AE rules applied:
+        //  - DebitAmount/CreditAmount must be numbers (double), NOT strings
+        //  - ExternalSystemIdentifier max 10 chars
+        //  - ExternalSystemReference max 25 chars
+        //  - Glide JournalLineNumber must be number (int), NOT string
+        //  - Glide UdfString1/UdfString2 max 50 chars
 
-        private IEnumerable<GlJournalLineInput> BuildLines(FeedBatch batch, List<FeedItem> items, DateTime acctDt)
+        private IEnumerable<GlJournalLineInput> BuildLines(FeedBatch batch, List<FeedItem> items, DateTime fallbackDate)
         {
             var lineNo = 1;
 
+            // Precompute a stable 12-char batch short id for external refs
+            var batchShort12 = batch.BatchID.ToString("N").Substring(0, 12);
+
             foreach (var i in items)
             {
-                var externalId = i.RecordID.ToString();
-                var externalRef = $"{batch.BatchID:N}-{i.RecordID:N}";
+                // Amounts MUST be numeric (NonNegativeFloat)
+                var amount = Convert.ToDouble(i.TotalCharge, CultureInfo.InvariantCulture);
 
-                var amountStr = ToMoneyString(i.TotalCharge);
-
-                var txDate = (i.TransactionDate == default ? acctDt : i.TransactionDate).Date;
+                // Dates
+                var txDate = (i.TransactionDate == default ? fallbackDate : i.TransactionDate).Date;
                 var txDateOnly = DateOnly.FromDateTime(txDate);
 
-                var udfQty = ToDouble(i.Quantity);
-                var udfUnitPrice = ToDouble(i.UnitPrice);
-                var udfTotal = ToDouble(i.TotalCharge);
+                // External IDs with strict max lengths
+                var recordN = i.RecordID.ToString("N");
+                var externalId10 = recordN.Substring(0, 10); // <= 10
 
-                var udfTestCode = SafeTrim(i.TestCode, 110);
-                var udfTestName = SafeTrim(i.TestName, 240);
+                var recordShort12 = recordN.Substring(0, 12);
+                var externalRef25 = $"{batchShort12}-{recordShort12}"; // 12 + 1 + 12 = 25
 
-                var desc = BuildLineDescription(i);
+                // Glide recommended fields
+                var udfQty = i.Quantity.HasValue ? Convert.ToDouble(i.Quantity.Value, CultureInfo.InvariantCulture) : (double?)null;
+                var udfUnitPrice = i.UnitPrice.HasValue ? Convert.ToDouble(i.UnitPrice.Value, CultureInfo.InvariantCulture) : (double?)null;
+                var udfTotal = Convert.ToDouble(i.TotalCharge, CultureInfo.InvariantCulture);
 
-                // DEBIT
+                var udfTestCode = SafeTrim(i.TestCode, 50);
+                var udfTestName = SafeTrim(i.TestName, 50); 
+
+                var desc = BuildLineDescription(i); // max 100
+
+                // DEBIT line
                 yield return new GlJournalLineInput
                 {
-                    DebitAmount = amountStr,
+                    DebitAmount = amount.ToString("F2", CultureInfo.InvariantCulture),
                     CreditAmount = null,
 
                     GlSegmentString = i.DebitChartString?.Trim(),
                     PpmSegmentString = null,
                     PpmComment = null,
 
-                    ExternalSystemIdentifier = externalId,
-                    ExternalSystemReference = externalRef,
+                    ExternalSystemIdentifier = externalId10,
+                    ExternalSystemReference = externalRef25,
 
                     Glide = new GlideInput
                     {
-                        JournalLineNumber = lineNo.ToString(CultureInfo.InvariantCulture),
+                        JournalLineNumber = (lineNo++).ToString(CultureInfo.InvariantCulture),
                         LineDescription = desc,
                         TransactionDate = txDateOnly,
 
@@ -321,24 +331,23 @@ namespace CAHFS_Recharges.Services
                         UdfString2 = udfTestName
                     }
                 };
-                lineNo++;
 
-                // CREDIT
+                // CREDIT line
                 yield return new GlJournalLineInput
                 {
                     DebitAmount = null,
-                    CreditAmount = amountStr,
+                    CreditAmount = amount.ToString("F2", CultureInfo.InvariantCulture),
 
                     GlSegmentString = i.CreditChartString?.Trim(),
                     PpmSegmentString = null,
                     PpmComment = null,
 
-                    ExternalSystemIdentifier = externalId,
-                    ExternalSystemReference = externalRef,
+                    ExternalSystemIdentifier = externalId10,
+                    ExternalSystemReference = externalRef25,
 
                     Glide = new GlideInput
                     {
-                        JournalLineNumber = lineNo.ToString(CultureInfo.InvariantCulture),
+                        JournalLineNumber = (lineNo++).ToString(CultureInfo.InvariantCulture),
                         LineDescription = desc,
                         TransactionDate = txDateOnly,
 
@@ -350,26 +359,10 @@ namespace CAHFS_Recharges.Services
                         UdfString2 = udfTestName
                     }
                 };
-                lineNo++;
             }
         }
 
-        // ============================================================
-        // Helpers aligned with staging datatypes
-        // ============================================================
-
-        private static string ToMoneyString(decimal value)
-            => value.ToString("0.00", CultureInfo.InvariantCulture);
-
-        private static double? ToDouble(int? v)
-            => v.HasValue ? Convert.ToDouble(v.Value, CultureInfo.InvariantCulture) : null;
-
-        private static double? ToDouble(decimal? v)
-            => v.HasValue ? Convert.ToDouble(v.Value, CultureInfo.InvariantCulture) : null;
-
-        private static double? ToDouble(decimal v)
-            => Convert.ToDouble(v, CultureInfo.InvariantCulture);
-
+        // Helpers
         private static string? SafeTrim(string? s, int maxLen)
         {
             if (string.IsNullOrWhiteSpace(s)) return null;
@@ -383,13 +376,11 @@ namespace CAHFS_Recharges.Services
             if (string.IsNullOrWhiteSpace(baseText))
                 baseText = "CAHFS Billing";
 
+            // AE: TrimmedString100
             return baseText.Length <= 100 ? baseText : baseText.Substring(0, 100);
         }
 
-        // ============================================================
         // Error Helpers
-        // ============================================================
-
         private static string? NormalizeErrorMessages(string? err)
         {
             if (string.IsNullOrWhiteSpace(err)) return null;
@@ -408,10 +399,7 @@ namespace CAHFS_Recharges.Services
             return string.Join(" | ", errors.Select(e => e.Message).Where(m => !string.IsNullOrWhiteSpace(m)));
         }
 
-        // ============================================================
         // Result DTOs
-        // ============================================================
-
         public sealed record PreviewResult(int ItemCount, int JournalLineCount, decimal DebitTotal, decimal CreditTotal, bool IsBalanced);
         public sealed record SendResult(bool Success, string Message, Guid? RequestId);
         public sealed record StatusResult(bool Success, string Message, Guid? RequestId);

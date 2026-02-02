@@ -4,12 +4,14 @@ using Amazon.Runtime.CredentialManagement;
 using CAHFS_Recharges.Data;
 using CAHFS_Recharges.Models;
 using CAHFS_Recharges.Services;
+using Hangfire;
+using Hangfire.SqlServer;
 using Joonasw.AspNetCore.SecurityHeaders;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using NLog;
 using NLog.Web;
 using Polly;
@@ -28,7 +30,7 @@ var logger = NLog.LogManager.Setup().LoadConfigurationFromAppSettings().GetCurre
 
 try
 {
-    //Load config files and AWS parameter store
+    // Load config files and AWS parameter store
     builder.Configuration.SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
         .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
         .AddJsonFile("appsettings." + builder.Environment.EnvironmentName + ".json", optional: true, reloadOnChange: true)
@@ -47,6 +49,7 @@ try
             Region = RegionEndpoint.USWest1,
             Profile = "cahfs"
         };
+
         builder.Configuration
             .AddSystemsManager("/" + builder.Environment.EnvironmentName, awsOptions)
             .AddSystemsManager("/Shared", awsOptions);
@@ -68,12 +71,11 @@ try
 
     builder.Host.UseNLog();
 
-    // Add cache options - for example, to cache the logged in user and their permissions
-    // Could remove if caching is not needed
+    // Cache
     builder.Services.AddDistributedMemoryCache();
     builder.Services.AddMemoryCache();
 
-    // Add Session
+    // Session
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddSession(options =>
     {
@@ -84,7 +86,7 @@ try
         options.Cookie.IsEssential = true;
     });
 
-    // Cross site request forgery security
+    // CSRF
     builder.Services.AddAntiforgery(options =>
     {
         options.HeaderName = "X-CSRF-TOKEN";
@@ -92,7 +94,7 @@ try
         options.Cookie.Name = "CAHFSRecharge.Antiforgery";
     });
 
-    // Setup CAS authentication cookie
+    // CAS cookie auth
     builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
         .AddCookie(options =>
         {
@@ -102,25 +104,28 @@ try
             options.ExpireTimeSpan = TimeSpan.FromHours(12);
         });
 
-    // Add CAS settings from appSettings configuration
+    // CAS settings
     builder.Services.Configure<CasSettings>(builder.Configuration.GetSection("Cas"));
 
-    // Define authorization policies
+    // Authorization policies
     builder.Services.AddAuthorization(options =>
     {
         options.AddPolicy("CAHFSUser", policy => policy.RequireClaim(ClaimTypes.AuthenticationMethod, "CAS"));
-        
+
         options.DefaultPolicy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
-            .AddRequirements(new AuthorizationPolicyBuilder().RequireClaim(ClaimTypes.AuthenticationMethod, "CAS").Build().Requirements.ToArray())
+            .AddRequirements(new AuthorizationPolicyBuilder()
+                .RequireClaim(ClaimTypes.AuthenticationMethod, "CAS")
+                .Build()
+                .Requirements
+                .ToArray())
             .Build();
     });
 
-    // Add services necessary for nonces in CSP, 32-byte nonces
+    // CSP nonces
     builder.Services.AddCsp(nonceByteAmount: 32);
 
-    // Add a CAS HttpClient factory with a retry policy where requests are retried up to 3 times with a exponential backoff of 2^n seconds between attempts.
-    // Each request has a timeout of 1 second and the overall will timeout after the default 100 seconds
+    // CAS HttpClient retry + timeout
     var retryPolicy = HttpPolicyExtensions
         .HandleTransientHttpError()
         .Or<TimeoutRejectedException>()
@@ -133,42 +138,29 @@ try
         .AddPolicyHandler(retryPolicy)
         .AddPolicyHandler(timeoutPolicy);
 
-    // Settings for HTTP Secure Transport Service
-    // See https://aka.ms/aspnetcore-hsts
+    // HSTS
     builder.Services.AddHsts(options =>
     {
         options.Preload = false;
         options.IncludeSubDomains = false;
-        options.MaxAge = TimeSpan.FromHours(1); // expand after we are confident
+        options.MaxAge = TimeSpan.FromHours(1);
         options.ExcludedHosts.Add("ucdavis.edu");
         options.ExcludedHosts.Add("vetmed.ucdavis.edu");
     });
 
-	// Settings when forcing HTTPS
-	/*
-    builder.Services.AddHttpsRedirection(options =>
-    {
-        options.RedirectStatusCode = (int)HttpStatusCode.TemporaryRedirect;
-        options.HttpsPort = 443;
-    });
-	*/
-
+    // DbContexts
     builder.Services.AddDbContext<FinancialContext>();
     builder.Services.AddDbContext<StarLIMSContext>();
     builder.Services.AddDbContext<EquineFinancialContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("EquineFinancialDb")));
+        options.UseSqlServer(builder.Configuration.GetConnectionString("EquineFinancialDb")));
 
-
-    // Add Data Protection services (i.e. encryption)
+    // Data Protection
     builder.Services.AddDataProtection();
 
-    // Quartz setup
+    // Quartz setup (kept as-is)
     builder.Services.AddQuartz(q =>
     {
-        //q.Properties["quartz.jobStore.tablePrefix"] = "QRTZ_";
-        //q.UseDefaultThreadPool(x => x.MaxConcurrency = 5);
-        //q.MisfireThreshold = TimeSpan.FromSeconds(5);
+        // optional quartz settings
     });
     builder.Services.AddQuartzHostedService(q =>
     {
@@ -176,135 +168,194 @@ try
         q.WaitForJobsToComplete = true;
     });
 
+    
+    // AE HTTP Trace Store 
+    builder.Services.AddSingleton<IAeHttpTraceStore, AeHttpTraceStore>();
 
-    //Strawberry shake config
-    /*
-    builder.Services.AddScoped(sp => new HttpClient
+    // Hangfire setup
+    var hangfireEnabled = builder.Configuration.GetValue<bool?>("Hangfire:Enabled") ?? true;
+    TimeZoneInfo? hangfireTz = null;
+
+    if (hangfireEnabled)
     {
-        BaseAddress = new Uri(builder.Configuration.GetSection("AggieEnterprise").GetValue<string>("BaseUrl") ?? "")
-    });
-    */
+        // Prefer standard ConnectionStrings lookup; fallback to direct key lookup for Parameter Store mappings
+        var hangfireConn =
+            builder.Configuration.GetConnectionString("HangfireDb")
+            ?? builder.Configuration["ConnectionStrings:HangfireDb"];
 
+        if (string.IsNullOrWhiteSpace(hangfireConn))
+        {
+            throw new Exception("Hangfire is enabled but ConnectionStrings:HangfireDb is missing/empty (check AWS Parameter Store mapping).");
+        }
+
+        var prepareSchema = builder.Configuration.GetValue<bool?>("Hangfire:PrepareSchemaIfNecessary") ?? false;
+
+        builder.Services.AddHangfire(hf =>
+            hf.SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+              .UseSimpleAssemblyNameTypeSerializer()
+              .UseRecommendedSerializerSettings()
+              .UseSqlServerStorage(hangfireConn, new SqlServerStorageOptions
+              {
+                  PrepareSchemaIfNecessary = prepareSchema,
+                  CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                  SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                  QueuePollInterval = TimeSpan.FromSeconds(15),
+                  UseRecommendedIsolationLevel = true,
+                  DisableGlobalLocks = true
+              })
+        );
+
+        builder.Services.AddHangfireServer();
+        builder.Services.AddScoped<HangfireJobs>();
+
+        // Timezone for recurring jobs
+        var tzId = builder.Configuration.GetValue<string>("Hangfire:TimeZone") ?? "America/Los_Angeles";
+        hangfireTz = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+    }
+
+    // Aggie Enterprise client + services
     builder.Services.AddSingleton<ITokenService, TokenService>();
     builder.Services.AddTransient<AuthorizationMessageHandler>();
-
 
     builder.Services
         .AddAggieEnterpriseClient()
         .ConfigureHttpClient((sp, client) =>
         {
-            var config = sp.GetService<IConfiguration>();
-            var baseUrl = config?.GetSection("AggieEnterprise").GetValue<string>("BaseUrl") ?? "";
+            var config = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = config.GetSection("AggieEnterprise").GetValue<string>("BaseUrl") ?? "";
             client.BaseAddress = new Uri(baseUrl);
-        }, builder =>
+
+            // Optional
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Accept.Add(
+                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+        },
+        clientBuilder =>
         {
-            builder.AddHttpMessageHandler<AuthorizationMessageHandler>();
+            // IMPORTANT: this is IHttpClientBuilder here, so AddHttpMessageHandler works
+            clientBuilder.AddHttpMessageHandler<AuthorizationMessageHandler>();
         });
 
 
+    // CAHFS Services
+
     // COA Validation
-    builder.Services.AddScoped<CAHFS_Recharges.Services.StagingCoaValidationService>();
+    builder.Services.AddScoped<StagingCoaValidationService>();
 
     // Ready to Send service
     builder.Services.AddScoped<AggieEnterpriseSendGatekeeper>();
 
-   // Journal creation and Upload service 
+    // Journal creation and Upload service
     builder.Services.AddScoped<AggieEnterpriseJournalUploadService>();
-
 
     var app = builder.Build();
 
-    // Add Content Security Policy
+    // CSP
     app.UseCsp(csp =>
     {
-        // Allow JavaScript from:
         csp.AllowScripts
-            .FromSelf() // This domain
-            .AddNonce() // Inline scripts only with Nonce
-            .AllowUnsafeEval(); // allow JS eval command (must also fit within other restrictions)
+            .FromSelf()
+            .AddNonce()
+            .AllowUnsafeEval();
 
-        // Contained iframes can be sourced from:
-        csp.AllowFrames
-            .FromNowhere(); // Nowhere, no iframes allowed
-
-        // Allow fonts to be downloaded from:
-        csp.AllowFonts
-            .FromSelf();// This domain
-
-        // Allow other sites to put this in an iframe?
-        csp.AllowFraming
-            .FromNowhere(); // Block framing on other sites, equivalent to X-Frame-Options: DENY
+        csp.AllowFrames.FromNowhere();
+        csp.AllowFonts.FromSelf();
+        csp.AllowFraming.FromNowhere();
 
         csp.AllowImages
-            .FromSelf()// This domain
-            .From("data:")// Allow data: images
+            .FromSelf()
+            .From("data:")
             .From("https://www.google-analytics.com")
             .From("*.ucdavis.edu")
             .From("*.vetmed.ucdavis.edu");
 
-        csp.AllowPlugins
-            .FromNowhere(); // Plugins not allowed
+        csp.AllowPlugins.FromNowhere();
 
         csp.AllowStyles
-            .FromSelf() // This domain
-            .AllowUnsafeInline(); // Allows inline CSS
+            .FromSelf()
+            .AllowUnsafeInline();
     });
 
-    // Configure the HTTP request pipeline.
+    // Pipeline
     if (!app.Environment.IsDevelopment())
     {
         app.UseExceptionHandler("/Error");
-        // see https://aka.ms/aspnetcore-hsts.
         app.UseHsts();
-        //app.UseHttpsRedirection(); // Force HTTPS
+        // app.UseHttpsRedirection();
     }
     else
     {
-        app.UseDeveloperExceptionPage(); // Development error / exception page
+        app.UseDeveloperExceptionPage();
     }
 
     app.UseStaticFiles();
     app.UseRouting();
+
     app.UseAuthentication();
     app.UseAuthorization();
+
     app.UseCookiePolicy();
     app.UseSession();
+
     app.MapRazorPages();
 
-    //Setup our HTTP Helper to get settings
+    // Setup HTTP Helper
     HttpHelper.Configure(app.Services.GetService<IMemoryCache>(),
         app.Services.GetService<IConfiguration>(),
         app.Environment,
         app.Services.GetService<IHttpContextAccessor>(),
         app.Services.GetService<IAuthorizationService>(),
-        app.Services.GetService<IDataProtectionProvider>()
-        );
+        app.Services.GetService<IDataProtectionProvider>());
+
+    // Hangfire dashboard + recurring jobs
+    if (hangfireEnabled)
+    {
+        // Dashboard (middleware). Auth is enforced by your HangfireAuthorizationFilter + global auth middleware.
+        app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
+        {
+            Authorization = new Hangfire.Dashboard.IDashboardAuthorizationFilter[]
+            {
+                new CAHFS_Recharges.Services.HangfireAuthorizationFilter()
+            }
+        });
+
+        var hangCronDaily = builder.Configuration.GetValue<string>("Hangfire:CronDaily") ?? "0 2 * * *";
+        var hangCronWed = builder.Configuration.GetValue<string>("Hangfire:CronWednesday") ?? "0 3 * * 3";
+        var tz = hangfireTz ?? TimeZoneInfo.Local;
+
+        RecurringJob.AddOrUpdate<HangfireJobs>(
+            "DailyCoaValidation",
+            job => job.ValidatePendingCoasJob(),
+            hangCronDaily,
+            new RecurringJobOptions { TimeZone = tz });
+
+        RecurringJob.AddOrUpdate<HangfireJobs>(
+            "WednesdaySendLastWeek",
+            job => job.SendLastWeekBatchesJob(),
+            hangCronWed,
+            new RecurringJobOptions { TimeZone = tz });
+    }
 
     app.Run();
 }
 catch (Exception exception)
 {
-    // NLog: catch setup errors
     logger.Fatal(exception, "Stopped program because of exception");
     throw;
 }
 finally
 {
-    // Ensure to flush and stop internal timers/threads before application-exit (Avoid segmentation fault on Linux)
     NLog.LogManager.Shutdown();
 }
 
-
-/// <summary>
 /// Try and parse the AWS credentials XML file and store it in the encrypted JSON
-/// </summary>
 void SetAwsCredentials(Logger logger)
 {
     XElement xAwsCredentials = XElement.Load(awsCredentialsFilePath, LoadOptions.None);
 
-    if (!String.IsNullOrWhiteSpace(xAwsCredentials?.Element("AccessKeyId")?.Value) && !String.IsNullOrWhiteSpace(xAwsCredentials?.Element("SecretAccessKey")?.Value))
+    if (!string.IsNullOrWhiteSpace(xAwsCredentials?.Element("AccessKeyId")?.Value) &&
+        !string.IsNullOrWhiteSpace(xAwsCredentials?.Element("SecretAccessKey")?.Value))
     {
-        // grab the credentials ouf of the xml file to stor in the encrypted json file inthe profile
         var options = new CredentialProfileOptions
         {
             AccessKey = xAwsCredentials?.Element("AccessKeyId")?.Value.Trim(),
@@ -312,12 +363,15 @@ void SetAwsCredentials(Logger logger)
         };
 
         var profile = new CredentialProfile("cahfs", options);
-        // if a region was specified in the xml then use the specified region else default to USWest1
-        if (!string.IsNullOrWhiteSpace(xAwsCredentials?.Element("RegionEndpoint")?.Value) && xAwsCredentials?.Element("RegionEndpoint") != null)
+
+        if (!string.IsNullOrWhiteSpace(xAwsCredentials?.Element("RegionEndpoint")?.Value) &&
+            xAwsCredentials?.Element("RegionEndpoint") != null)
         {
-#pragma warning disable CS8604 // Possible null reference argument.
-            profile.Region = typeof(Amazon.RegionEndpoint).GetField(xAwsCredentials?.Element("RegionEndpoint")?.Value)?.GetValue(null) as Amazon.RegionEndpoint;
-#pragma warning restore CS8604 // Possible null reference argument.
+#pragma warning disable CS8604
+            profile.Region = typeof(Amazon.RegionEndpoint)
+                .GetField(xAwsCredentials?.Element("RegionEndpoint")?.Value)?
+                .GetValue(null) as Amazon.RegionEndpoint;
+#pragma warning restore CS8604
         }
         else
         {
@@ -332,7 +386,7 @@ void SetAwsCredentials(Logger logger)
         }
         catch
         {
-            logger.Error($"COULD NOT DELETE THE AWS CREDENTIALS XML FILE (\"{awsCredentialsFilePath}\").  The file will need to be deleted manually.");
+            logger.Error($"COULD NOT DELETE THE AWS CREDENTIALS XML FILE (\"{awsCredentialsFilePath}\"). The file will need to be deleted manually.");
         }
     }
     else

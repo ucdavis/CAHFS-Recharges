@@ -1,48 +1,51 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using CAHFS_Recharges.Data;
 using CAHFS_Recharges.Models;
 using CAHFS_Recharges.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
-namespace CAHFS_Recharges.Pages.Staging
+namespace CAHFS_Recharges.Pages.Integrations.Staging
 {
-    // Optional but helpful: avoid caching
+    /// <summary>
+    /// Unified Manual Send to AE page for both CAHFS and EQUINE integrations.
+    /// Uses route parameter {integration} to determine which database to use.
+    /// Route: /Integrations/{integration}/Staging/SendToAggieEnterprise
+    /// </summary>
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class SendToAggieEnterpriseModel : PageModel
+    public class SendToAggieEnterpriseModel : IntegrationPageModel
     {
-        private readonly FinancialContext _db;
+        private readonly IIntegrationDbResolver _dbResolver;
         private readonly AggieEnterpriseSendGatekeeper _gatekeeper;
         private readonly AggieEnterpriseJournalUploadService _upload;
 
         public SendToAggieEnterpriseModel(
-            FinancialContext db,
+            IIntegrationDbResolver dbResolver,
             AggieEnterpriseSendGatekeeper gatekeeper,
-            AggieEnterpriseJournalUploadService upload)
+            AggieEnterpriseJournalUploadService upload,
+            IIntegrationContextService integrationService,
+            IAuthorizationService authorizationService)
+            : base(integrationService, authorizationService)
         {
-            _db = db;
+            _dbResolver = dbResolver;
             _gatekeeper = gatekeeper;
             _upload = upload;
         }
 
-        [TempData]
-        public string? PageMessage { get; set; }
+        /// Gets the current integration type (resolved from route).
+        private IntegrationType ResolvedIntegration => CurrentIntegration ?? IntegrationType.CAHFS;
 
-        //Controls whether preview should be shown on the next GET
         [TempData]
         public bool ShowPreview { get; set; }
 
-        //Which batch that preview belongs to
         [TempData]
         public Guid? PreviewForBatchId { get; set; }
 
-        // Filters
         [BindProperty(SupportsGet = true)]
         public DateTime? FromDate { get; set; }
 
@@ -50,81 +53,97 @@ namespace CAHFS_Recharges.Pages.Staging
         public DateTime? ToDate { get; set; }
 
         [BindProperty(SupportsGet = true)]
-        public string? Status { get; set; }
-
-        [BindProperty(SupportsGet = true)]
         public string? JournalName { get; set; }
 
-        // Selected Batch
         [BindProperty(SupportsGet = true)]
         public Guid? SelectedBatchId { get; set; }
 
         public IList<FeedBatch> Batches { get; set; } = new List<FeedBatch>();
         public FeedBatch? SelectedBatch { get; set; }
 
-        // Summary strings
         public string? AccountingDateText { get; set; }
         public string? AccountingPeriodText { get; set; }
 
-        // Gatekeeping UI
         public bool GateCanSend { get; set; }
         public string GateMessage { get; set; } = "Select a batch.";
         public AggieEnterpriseSendGatekeeper.GateSummary? GateSummary { get; set; }
 
-        // Preview
         public AggieEnterpriseJournalUploadService.PreviewResult? Preview { get; set; }
+
+        public DateTime LastRefreshedAt { get; set; } = DateTime.Now;
+
+        /// <summary>Count of batches successfully sent (Validated, Complete, Completed, Success) for the Sent History card.</summary>
+        public int SuccessfullySentCount { get; set; }
+
+        /// <summary>Count of batches that currently have invalid COA items (for the COA Validations summary card).</summary>
+        public int InvalidBatchCount { get; set; }
 
         public async Task OnGetAsync()
         {
             await LoadPageAsync(loadPreview: false);
 
-            // Only build preview on GET when explicitly requested, and only for the same batch
             if (ShowPreview && SelectedBatchId.HasValue && PreviewForBatchId.HasValue
                 && PreviewForBatchId.Value == SelectedBatchId.Value)
             {
-                Preview = await _upload.BuildPreviewAsync(SelectedBatchId.Value);
+                Preview = await _upload.BuildPreviewAsync(SelectedBatchId.Value, ResolvedIntegration);
             }
             else
             {
                 Preview = null;
             }
 
-            // Consume the flag so it doesn't “stick” across future navigations
             ShowPreview = false;
         }
 
         public async Task<IActionResult> OnPostBuildPreviewAsync()
         {
+            if (!await IsOperatorAsync())
+            {
+                SetErrorMessage("You do not have permission to perform this action.");
+                return RedirectToThis();
+            }
+
             await LoadPageAsync(loadPreview: false);
 
             if (!SelectedBatchId.HasValue)
             {
-                PageMessage = "Please select a batch.";
+                SetErrorMessage("Please select a batch.");
                 return RedirectToThis();
             }
 
-            // PRG: set flags and redirect to GET
             PreviewForBatchId = SelectedBatchId.Value;
             ShowPreview = true;
+            SetInfoMessage("Preview built.");
 
-            PageMessage = "Preview built.";
             return RedirectToThis();
         }
 
         public async Task<IActionResult> OnPostSendToAeAsync()
         {
+            if (!await IsOperatorAsync())
+            {
+                SetErrorMessage("You do not have permission to perform this action.");
+                return RedirectToThis();
+            }
+
             await LoadPageAsync(loadPreview: false);
 
             if (!SelectedBatchId.HasValue)
             {
-                PageMessage = "Please select a batch.";
+                SetErrorMessage("Please select a batch.");
                 return RedirectToThis();
             }
 
-            var result = await _upload.SendBatchAsync(SelectedBatchId.Value);
-            PageMessage = result.Message;
+            var result = await _upload.SendBatchAsync(SelectedBatchId.Value, ResolvedIntegration);
+            if (result.Success)
+            {
+                SetSuccessMessage(result.Message);
+            }
+            else
+            {
+                SetErrorMessage(result.Message);
+            }
 
-            // after sending, do not keep preview
             ShowPreview = false;
             PreviewForBatchId = null;
 
@@ -133,16 +152,29 @@ namespace CAHFS_Recharges.Pages.Staging
 
         public async Task<IActionResult> OnPostRefreshStatusAsync()
         {
+            if (!await IsOperatorAsync())
+            {
+                SetErrorMessage("You do not have permission to perform this action.");
+                return RedirectToThis();
+            }
+
             await LoadPageAsync(loadPreview: false);
 
             if (!SelectedBatchId.HasValue)
             {
-                PageMessage = "Please select a batch.";
+                SetErrorMessage("Please select a batch.");
                 return RedirectToThis();
             }
 
-            var result = await _upload.CheckStatusAsync(SelectedBatchId.Value);
-            PageMessage = result.Message;
+            var result = await _upload.CheckStatusAsync(SelectedBatchId.Value, ResolvedIntegration);
+            if (result.Success)
+            {
+                SetInfoMessage(result.Message);
+            }
+            else
+            {
+                SetErrorMessage(result.Message);
+            }
 
             return RedirectToThis();
         }
@@ -152,8 +184,8 @@ namespace CAHFS_Recharges.Pages.Staging
             if (!SelectedBatchId.HasValue)
                 return RedirectToThis();
 
-            var json = await _upload.BuildPayloadJsonAsync(SelectedBatchId.Value);
-            var fileName = $"glJournalRequest_{SelectedBatchId.Value}_{DateTime.UtcNow:yyyyMMddHHmmss}.json";
+            var json = await _upload.BuildPayloadJsonAsync(SelectedBatchId.Value, ResolvedIntegration);
+            var fileName = $"glJournalRequest_{ResolvedIntegration}_{SelectedBatchId.Value}_{DateTime.UtcNow:yyyyMMddHHmmss}.json";
 
             return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
         }
@@ -162,7 +194,6 @@ namespace CAHFS_Recharges.Pages.Staging
         {
             ResolveSelectedBatchIdFromRequest();
 
-            // If user changed batch (GET), kill preview flags immediately
             if (!HttpMethods.IsPost(Request.Method))
             {
                 if (PreviewForBatchId.HasValue && SelectedBatchId.HasValue &&
@@ -173,8 +204,11 @@ namespace CAHFS_Recharges.Pages.Staging
                 }
             }
 
-            // Load batches with filters
-            var q = _db.FeedBatches.AsQueryable();
+            // Use resolver to get correct DbSets
+            var feedBatches = _dbResolver.GetFeedBatches(ResolvedIntegration);
+            var feedItems = _dbResolver.GetFeedItems(ResolvedIntegration);
+
+            var q = feedBatches.AsQueryable();
 
             if (FromDate.HasValue)
             {
@@ -188,11 +222,8 @@ namespace CAHFS_Recharges.Pages.Staging
                 q = q.Where(b => (b.AETransactionDate ?? b.DateSent) < to);
             }
 
-            if (!string.IsNullOrWhiteSpace(Status))
-            {
-                var s = Status.Trim().ToUpperInvariant();
-                q = q.Where(b => b.AERequestStatus != null && b.AERequestStatus.ToUpper() == s);
-            }
+            // For this page, only show batches that are Ready to send.
+            q = q.Where(b => b.AERequestStatus != null && b.AERequestStatus.Trim() == "Ready");
 
             if (!string.IsNullOrWhiteSpace(JournalName))
             {
@@ -207,10 +238,27 @@ namespace CAHFS_Recharges.Pages.Staging
                 .AsNoTracking()
                 .ToListAsync();
 
-            // Auto-select first batch ONLY if user did not provide selection in query or form
+            // Count successfully sent batches (same logic as Sent History "Successful")
+            SuccessfullySentCount = await feedBatches
+                .AsNoTracking()
+                .CountAsync(b => b.AERequestStatus != null &&
+                    (b.AERequestStatus.Trim() == "Validated" ||
+                     b.AERequestStatus.Trim() == "Complete" ||
+                     b.AERequestStatus.Trim() == "Completed" ||
+                     b.AERequestStatus.Trim() == "Success"));
+
+            // Count batches that have at least one invalid item (for COA Validations card)
+            InvalidBatchCount = await feedItems
+                .AsNoTracking()
+                .Where(i => i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid")
+                .Select(i => i.BatchID)
+                .Distinct()
+                .CountAsync();
+
             var hasQuery = Request.Query.ContainsKey("SelectedBatchId");
             var hasForm = HttpMethods.IsPost(Request.Method) && Request.Form.ContainsKey("SelectedBatchId");
 
+            // First-load default: if nothing explicitly selected, pick the first available batch
             if (!hasQuery && !hasForm && !SelectedBatchId.HasValue && Batches.Any())
             {
                 SelectedBatchId = Batches.First().BatchID;
@@ -218,10 +266,27 @@ namespace CAHFS_Recharges.Pages.Staging
                 PreviewForBatchId = null;
             }
 
-            // Load selected batch + gatekeeping
+            // Auto-advance behavior: if the previously selected batch is no longer in the
+            // current filtered list (e.g. it was Sent and dropped out of Ready),
+            // move selection to the first remaining batch (if any).
+            if (SelectedBatchId.HasValue && !Batches.Any(b => b.BatchID == SelectedBatchId.Value))
+            {
+                if (Batches.Any())
+                {
+                    SelectedBatchId = Batches.First().BatchID;
+                }
+                else
+                {
+                    SelectedBatchId = null;
+                }
+
+                ShowPreview = false;
+                PreviewForBatchId = null;
+            }
+
             if (SelectedBatchId.HasValue)
             {
-                SelectedBatch = await _db.FeedBatches
+                SelectedBatch = await feedBatches
                     .AsNoTracking()
                     .FirstOrDefaultAsync(b => b.BatchID == SelectedBatchId.Value);
 
@@ -231,7 +296,7 @@ namespace CAHFS_Recharges.Pages.Staging
                     AccountingDateText = acctDt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                     AccountingPeriodText = acctDt.ToString("MMM-yy", CultureInfo.InvariantCulture);
 
-                    var gate = await _gatekeeper.CanSendBatchAsync(SelectedBatchId.Value);
+                    var gate = await _gatekeeper.CanSendBatchAsync(SelectedBatchId.Value, ResolvedIntegration);
                     GateCanSend = gate.CanSend;
                     GateMessage = gate.Message;
                     GateSummary = gate.Summary;
@@ -259,8 +324,7 @@ namespace CAHFS_Recharges.Pages.Staging
 
             if (loadPreview && SelectedBatchId.HasValue)
             {
-                // not used in this flow, but kept for completeness
-                Preview = await _upload.BuildPreviewAsync(SelectedBatchId.Value);
+                Preview = await _upload.BuildPreviewAsync(SelectedBatchId.Value, ResolvedIntegration);
                 PreviewForBatchId = SelectedBatchId.Value;
                 ShowPreview = true;
             }
@@ -268,7 +332,6 @@ namespace CAHFS_Recharges.Pages.Staging
 
         private void ResolveSelectedBatchIdFromRequest()
         {
-            // POST
             if (HttpMethods.IsPost(Request.Method))
             {
                 var rawForm = Request.Form["SelectedBatchId"].FirstOrDefault();
@@ -279,7 +342,6 @@ namespace CAHFS_Recharges.Pages.Staging
                 }
             }
 
-            // GET
             var rawQuery = Request.Query["SelectedBatchId"].FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(rawQuery) && Guid.TryParse(rawQuery, out var g2))
             {
@@ -294,9 +356,9 @@ namespace CAHFS_Recharges.Pages.Staging
         {
             return RedirectToPage(new
             {
+                Integration,  // Preserve route parameter
                 FromDate = FromDate?.ToString("yyyy-MM-dd"),
                 ToDate = ToDate?.ToString("yyyy-MM-dd"),
-                Status,
                 JournalName,
                 SelectedBatchId
             });

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CAHFS.GraphQl;
 using CAHFS_Recharges.Data;
+using CAHFS_Recharges.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -14,6 +15,7 @@ namespace CAHFS_Recharges.Services
     public sealed class StagingCoaValidationService
     {
         private readonly FinancialContext _db;
+        private readonly IIntegrationDbResolver _dbResolver;
         private readonly IAggieEnterpriseClient _ae;
         private readonly ILogger<StagingCoaValidationService> _log;
 
@@ -25,12 +27,35 @@ namespace CAHFS_Recharges.Services
 
         public StagingCoaValidationService(
             FinancialContext db,
+            IIntegrationDbResolver dbResolver,
             IAggieEnterpriseClient aggieEnterpriseClient,
             ILogger<StagingCoaValidationService> log)
         {
             _db = db;
+            _dbResolver = dbResolver;
             _ae = aggieEnterpriseClient;
             _log = log;
+        }
+
+        public async Task<int> ValidatePendingItemsAsync(
+            IntegrationType integration,
+            int batchSize = 250,
+            int maxParallelCalls = 5,
+            CancellationToken ct = default)
+        {
+            var feedItems = _dbResolver.GetFeedItems(integration);
+            return await ValidatePendingItemsCoreAsync(
+                batchSize,
+                maxParallelCalls,
+                ct,
+                () => feedItems
+                    .Where(i => i.DebitStringValid == null || i.CreditStringValid == null)
+                    .OrderBy(i => i.BatchID)
+                    .ThenBy(i => i.RecordID)
+                    .Take(batchSize)
+                    .ToListAsync(ct),
+                () => _dbResolver.SaveChangesAsync(integration, ct),
+                batchIds => UpdateBatchStatusAsync(integration, batchIds, ct));
         }
 
         public async Task<int> ValidatePendingItemsAsync(
@@ -40,17 +65,14 @@ namespace CAHFS_Recharges.Services
         {
             int updated = 0;
 
-            // Thread-safe cache (fixes your “non-concurrent collections” crash)
             var cache = new ConcurrentDictionary<string, (bool IsValid, string? Error)>(StringComparer.OrdinalIgnoreCase);
 
-            // Track batches affected
             var affectedBatches = new HashSet<Guid>();
 
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
 
-                // Pull a batch of pending items (tracked entities)
                 var items = await _db.FeedItems
                     .Where(i => i.DebitStringValid == null || i.CreditStringValid == null)
                     .OrderBy(i => i.BatchID)
@@ -64,7 +86,6 @@ namespace CAHFS_Recharges.Services
                 foreach (var i in items)
                     affectedBatches.Add(i.BatchID);
 
-                // Build a validation worklist WITHOUT mutating EF entities in parallel
                 var work = new List<(Guid RecordId, string Side, string? Coa)>();
 
                 foreach (var item in items)
@@ -100,7 +121,6 @@ namespace CAHFS_Recharges.Services
 
                 await Task.WhenAll(tasks);
 
-                // Now update EF entities (single-threaded)
                 foreach (var item in items)
                 {
                     if (item.DebitStringValid == null && results.TryGetValue((item.RecordID, "D"), out var dr))
@@ -132,6 +152,87 @@ namespace CAHFS_Recharges.Services
             }
 
             await UpdateBatchStatusAsync(affectedBatches, ct);
+            return updated;
+        }
+
+        private async Task<int> ValidatePendingItemsCoreAsync(
+            int batchSize,
+            int maxParallelCalls,
+            CancellationToken ct,
+            Func<Task<List<FeedItem>>> getPendingItems,
+            Func<Task<int>> saveChanges,
+            Func<HashSet<Guid>, Task> updateBatchStatus)
+        {
+            int updated = 0;
+            var cache = new ConcurrentDictionary<string, (bool IsValid, string? Error)>(StringComparer.OrdinalIgnoreCase);
+            var affectedBatches = new HashSet<Guid>();
+
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                var items = await getPendingItems().ConfigureAwait(false);
+                if (items.Count == 0)
+                    break;
+
+                foreach (var i in items)
+                    affectedBatches.Add(i.BatchID);
+
+                var work = new List<(Guid RecordId, string Side, string? Coa)>();
+                foreach (var item in items)
+                {
+                    if (item.DebitStringValid == null)
+                        work.Add((item.RecordID, "D", item.DebitChartString));
+                    if (item.CreditStringValid == null)
+                        work.Add((item.RecordID, "C", item.CreditChartString));
+                }
+
+                using var throttler = new SemaphoreSlim(maxParallelCalls);
+                var results = new ConcurrentDictionary<(Guid RecordId, string Side), (bool IsValid, string? Error)>();
+
+                var tasks = work.Select(async w =>
+                {
+                    await throttler.WaitAsync(ct).ConfigureAwait(false);
+                    try
+                    {
+                        var r = await ValidateCoaAsync(w.Coa, cache, ct).ConfigureAwait(false);
+                        results[(w.RecordId, w.Side)] = r;
+                    }
+                    catch (Exception ex)
+                    {
+                        results[(w.RecordId, w.Side)] = (false, $"AE API error: {ex.Message}");
+                    }
+                    finally
+                    {
+                        throttler.Release();
+                    }
+                });
+
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+
+                foreach (var item in items)
+                {
+                    if (item.DebitStringValid == null && results.TryGetValue((item.RecordID, "D"), out var dr))
+                    {
+                        item.DebitStringValid = dr.IsValid ? "Valid" : "Invalid";
+                        item.DebitValidationError = dr.IsValid ? null : (dr.Error ?? "Invalid");
+                        if (!dr.IsValid)
+                            _log.LogWarning("Invalid COA | RecordID={RecordID} | Side=Debit | COA={COA} | Err={Err}",
+                                item.RecordID, item.DebitChartString, item.DebitValidationError ?? "-");
+                    }
+                    if (item.CreditStringValid == null && results.TryGetValue((item.RecordID, "C"), out var cr))
+                    {
+                        item.CreditStringValid = cr.IsValid ? "Valid" : "Invalid";
+                        item.CreditValidationError = cr.IsValid ? null : (cr.Error ?? "Invalid");
+                        if (!cr.IsValid)
+                            _log.LogWarning("Invalid COA | RecordID={RecordID} | Side=Credit | COA={COA} | Err={Err}",
+                                item.RecordID, item.CreditChartString, item.CreditValidationError ?? "-");
+                    }
+                }
+
+                updated += await saveChanges().ConfigureAwait(false);
+            }
+
+            await updateBatchStatus(affectedBatches).ConfigureAwait(false);
             return updated;
         }
 
@@ -183,6 +284,37 @@ namespace CAHFS_Recharges.Services
                 var msg = $"AE API error: {ex.Message}";
                 cache[coa] = (false, msg);
                 return (false, msg);
+            }
+        }
+
+        private async Task UpdateBatchStatusAsync(IntegrationType integration, HashSet<Guid> batchIds, CancellationToken ct)
+        {
+            if (batchIds.Count == 0)
+                return;
+
+            var feedItems = _dbResolver.GetFeedItems(integration);
+            foreach (var batchId in batchIds)
+            {
+                var hasInvalid = await feedItems.AnyAsync(i =>
+                    i.BatchID == batchId &&
+                    (i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid"), ct);
+
+                if (hasInvalid)
+                {
+                    await _dbResolver.ExecuteSqlAsync(integration,
+                        $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {"Needs Review"} WHERE batchID = {batchId}", ct);
+                    continue;
+                }
+
+                var hasPending = await feedItems.AnyAsync(i =>
+                    i.BatchID == batchId &&
+                    (i.DebitStringValid == null || i.CreditStringValid == null), ct);
+
+                if (!hasPending)
+                {
+                    await _dbResolver.ExecuteSqlAsync(integration,
+                        $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {"Ready"} WHERE batchID = {batchId}", ct);
+                }
             }
         }
 

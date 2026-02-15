@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -6,7 +6,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using CAHFS_Recharges.Data;
 using CAHFS_Recharges.Models;
 using CAHFS.GraphQl;
 using Microsoft.EntityFrameworkCore;
@@ -14,39 +13,53 @@ using Microsoft.Extensions.Logging;
 
 namespace CAHFS_Recharges.Services
 {
+    /// Journal upload service supporting both CAHFS and EQUINE integrations.
+    /// Uses IIntegrationDbResolver to route to the correct database.
     public sealed class AggieEnterpriseJournalUploadService
     {
-        private const string BoundaryAppName = "UCD CAHFS Billing";
-        private const string JournalSourceName = "UCD CAHFS Billing";
         private const string JournalCategoryName = "UCD Recharge";
 
-        private readonly FinancialContext _db;
+        private readonly IIntegrationDbResolver _dbResolver;
         private readonly IAggieEnterpriseClient _ae;
         private readonly AggieEnterpriseSendGatekeeper _gatekeeper;
         private readonly ILogger<AggieEnterpriseJournalUploadService> _log;
         private readonly IAeHttpTraceStore _trace;
 
-
         public AggieEnterpriseJournalUploadService(
-            FinancialContext db,
+            IIntegrationDbResolver dbResolver,
             IAggieEnterpriseClient ae,
             AggieEnterpriseSendGatekeeper gatekeeper,
             ILogger<AggieEnterpriseJournalUploadService> log,
             IAeHttpTraceStore trace)
         {
-            _db = db;
+            _dbResolver = dbResolver;
             _ae = ae;
             _gatekeeper = gatekeeper;
             _log = log;
             _trace = trace;
         }
 
+        // Integration-specific configuration
+        private static string GetBoundaryAppName(IntegrationType integration) => "UCD CAHFS Billing";
+
+        private static string GetJournalSourceName(IntegrationType integration) => "UCD CAHFS Billing";
+
+        private static string GetJournalPrefix(IntegrationType integration) => integration.ToString();
+
+        private static string GetDefaultLineDescription(IntegrationType integration) => integration switch
+        {
+            IntegrationType.EQUINE => "EQUINE Billing",
+            _ => "CAHFS Billing"
+        };
+
         // Preview + Download JSON
-        public async Task<PreviewResult> BuildPreviewAsync(Guid batchId, CancellationToken ct = default)
+        public async Task<PreviewResult> BuildPreviewAsync(Guid batchId, IntegrationType integration, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
 
-            var items = await _db.FeedItems
+            var feedItems = _dbResolver.GetFeedItems(integration);
+
+            var items = await feedItems
                 .AsNoTracking()
                 .Where(i => i.BatchID == batchId)
                 .ToListAsync(ct);
@@ -64,18 +77,21 @@ namespace CAHFS_Recharges.Services
             return new PreviewResult(itemCount, lineCount, debitTotal, creditTotal, isBalanced);
         }
 
-        public async Task<string> BuildPayloadJsonAsync(Guid batchId, CancellationToken ct = default)
+        public async Task<string> BuildPayloadJsonAsync(Guid batchId, IntegrationType integration, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
 
-            var batch = await _db.FeedBatches
+            var feedBatches = _dbResolver.GetFeedBatches(integration);
+            var feedItems = _dbResolver.GetFeedItems(integration);
+
+            var batch = await feedBatches
                 .AsNoTracking()
                 .FirstOrDefaultAsync(b => b.BatchID == batchId, ct);
 
             if (batch == null)
                 return "{ \"error\": \"Batch not found.\" }";
 
-            var items = await _db.FeedItems
+            var items = await feedItems
                 .AsNoTracking()
                 .Where(i => i.BatchID == batchId)
                 .OrderBy(i => i.TransactionDate)
@@ -85,7 +101,7 @@ namespace CAHFS_Recharges.Services
             if (items.Count == 0)
                 return "{ \"error\": \"No items found for this batch.\" }";
 
-            var requestInput = BuildRequest(batch, items);
+            var requestInput = BuildRequest(batch, items, integration);
 
             // OLD (caused manual API tests to fail if you copy/paste JSON as variables):
             // - default serialization emits PascalCase ("Header", "Payload")
@@ -110,21 +126,24 @@ namespace CAHFS_Recharges.Services
 
         // Send to AE (Gatekeep + Build + glJournalRequest mutation)
 
-        public async Task<SendResult> SendBatchAsync(Guid batchId, CancellationToken ct = default)
+        public async Task<SendResult> SendBatchAsync(Guid batchId, IntegrationType integration, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
 
+            var feedBatches = _dbResolver.GetFeedBatches(integration);
+            var feedItems = _dbResolver.GetFeedItems(integration);
+
             // 1) Gatekeeping
-            var gate = await _gatekeeper.CanSendBatchAsync(batchId, ct);
+            var gate = await _gatekeeper.CanSendBatchAsync(batchId, integration, ct);
             if (!gate.CanSend)
                 return new SendResult(false, gate.Message, null);
 
             // 2) Load batch + items
-            var batch = await _db.FeedBatches.FirstOrDefaultAsync(b => b.BatchID == batchId, ct);
+            var batch = await feedBatches.FirstOrDefaultAsync(b => b.BatchID == batchId, ct);
             if (batch == null)
                 return new SendResult(false, "Batch not found.", null);
 
-            var items = await _db.FeedItems
+            var items = await feedItems
                 .Where(i => i.BatchID == batchId)
                 .OrderBy(i => i.TransactionDate)
                 .ThenBy(i => i.RecordID)
@@ -134,7 +153,7 @@ namespace CAHFS_Recharges.Services
                 return new SendResult(false, "No items found for this batch.", null);
 
             // 3) Build request input
-            var requestInput = BuildRequest(batch, items);
+            var requestInput = BuildRequest(batch, items, integration);
 
             // 4) Call mutation
             try
@@ -157,7 +176,7 @@ namespace CAHFS_Recharges.Services
                             ? "AE returned no data."
                             : $"AE returned no data. GraphQL: {gqlErrorsText}";
 
-                    await _db.SaveChangesAsync(ct);
+                    await _dbResolver.SaveChangesAsync(integration, ct);
                     return new SendResult(false, batch.ErrorDetail ?? "AE returned no data.", null);
                 }
 
@@ -180,7 +199,7 @@ namespace CAHFS_Recharges.Services
                 if (data.ValidationResults != null && data.ValidationResults.Valid == false)
                     batch.AERequestStatus = "Error";
 
-                await _db.SaveChangesAsync(ct);
+                await _dbResolver.SaveChangesAsync(integration, ct);
 
                 var ok = !(data.ValidationResults?.Valid == false);
                 var msg = batch.AERequestStatus.Equals("Error", StringComparison.OrdinalIgnoreCase)
@@ -200,18 +219,20 @@ namespace CAHFS_Recharges.Services
                         ? httpDetail
                         : ex.ToString();   // full stack trace if no HTTP trace exists
 
-                await _db.SaveChangesAsync(ct);
+                await _dbResolver.SaveChangesAsync(integration, ct);
                 return new SendResult(false, batch.ErrorDetail ?? "AE call failed.", null);
             }
         }
 
         // Poll Status (glJournalRequestStatus query)
 
-        public async Task<StatusResult> CheckStatusAsync(Guid batchId, CancellationToken ct = default)
+        public async Task<StatusResult> CheckStatusAsync(Guid batchId, IntegrationType integration, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
 
-            var batch = await _db.FeedBatches.FirstOrDefaultAsync(b => b.BatchID == batchId, ct);
+            var feedBatches = _dbResolver.GetFeedBatches(integration);
+
+            var batch = await feedBatches.FirstOrDefaultAsync(b => b.BatchID == batchId, ct);
             if (batch == null)
                 return new StatusResult(false, "Batch not found.", null);
 
@@ -243,30 +264,35 @@ namespace CAHFS_Recharges.Services
                 !string.IsNullOrWhiteSpace(requestErr) ? requestErr :
                 (!string.IsNullOrWhiteSpace(gqlErrorsText) ? gqlErrorsText : null);
 
-            await _db.SaveChangesAsync(ct);
+            await _dbResolver.SaveChangesAsync(integration, ct);
 
             return new StatusResult(true, $"AE Status: {batch.AERequestStatus}", batch.AEConsumerRequestID);
         }
 
         // Build Request (Header + Payload)
 
-        private GlJournalRequestInput BuildRequest(FeedBatch batch, List<FeedItem> items)
+        private GlJournalRequestInput BuildRequest(FeedBatch batch, List<FeedItem> items, IntegrationType integration)
         {
-            var acctDt = (batch.AETransactionDate ?? batch.DateSent ?? DateTime.UtcNow).Date;
+            //var acctDt = (batch.AETransactionDate ?? batch.DateSent ?? DateTime.UtcNow).Date;
 
             // TESTING MODE:
             // Use Pacific Time "today" so AE doesn't see it as a future date
-            //var pacific = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-            //var acctDt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacific).Date;
+            var pacific = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            var acctDt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacific).Date;
             var accountingDate = DateOnly.FromDateTime(acctDt);
 
+            var prefix = GetJournalPrefix(integration);
+            var boundaryAppName = GetBoundaryAppName(integration);
+
             var nowStamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
-            var consumerRef = $"Journal Upload CAHFS {nowStamp}";
+            var consumerRef = $"Journal Upload {prefix} {nowStamp}";
+
+            var journalSourceName = GetJournalSourceName(integration);
 
             var header = new ActionRequestHeaderInput
             {
-                BoundaryApplicationName = BoundaryAppName,
-                ConsumerId = BoundaryAppName,
+                BoundaryApplicationName = boundaryAppName,
+                ConsumerId = boundaryAppName,
                 ConsumerNotes = batch.AEConsumnerNotes,
                 ConsumerReferenceId = consumerRef,
                 ConsumerTrackingId = consumerRef,
@@ -274,15 +300,15 @@ namespace CAHFS_Recharges.Services
             };
 
             var journalName = string.IsNullOrWhiteSpace(batch.AEJournalName)
-                ? $"CAHFS Journal {acctDt:yyyy-MM-dd}"
+                ? $"{prefix} Journal {acctDt:yyyy-MM-dd}"
                 : batch.AEJournalName;
 
             // journalReference in AE is max 25 chars; your DB column is 50, so enforce 25.
             var journalReference = string.IsNullOrWhiteSpace(batch.AEJournalReference)
-                ? $"CAHFS_{acctDt:yyyyMMdd}"
+                ? $"{prefix}_{acctDt:yyyyMMdd}"
                 : batch.AEJournalReference;
 
-            journalReference = SafeTrim(journalReference, 25) ?? $"CAHFS_{acctDt:yyyyMMdd}";
+            journalReference = SafeTrim(journalReference, 25) ?? $"{prefix}_{acctDt:yyyyMMdd}";
 
             // IMPORTANT CHANGE:
             // OLD: we were setting AccountingPeriodName from acctDt (can land in closed period and fail validation).
@@ -297,14 +323,14 @@ namespace CAHFS_Recharges.Services
             {
                 AccountingDate = accountingDate,
                 AccountingPeriodName = accountingPeriodName, // keep null
-                JournalSourceName = JournalSourceName,
+                JournalSourceName = journalSourceName,
                 JournalCategoryName = JournalCategoryName,
                 JournalName = SafeTrim(journalName, 100) ?? journalName,
                 JournalReference = journalReference,
                 JournalDescription = SafeTrim(batch.AEJournalDescription ?? journalName, 240)
                     ?? (batch.AEJournalDescription ?? journalName),
 
-                JournalLines = BuildLines(batch, items, acctDt).ToList()
+                JournalLines = BuildLines(batch, items, acctDt, integration).ToList()
             };
 
             return new GlJournalRequestInput
@@ -314,47 +340,26 @@ namespace CAHFS_Recharges.Services
             };
         }
 
-        // Build Lines (2 per FeedItem: debit + credit)
-        //
-        // KEY FIXES WE DISCUSSED:
-        //  - Don’t always set glSegmentString.
-        //  - If the line is PPM, you must set ppmSegmentString (and keep glSegmentString = null).
-        //  - If the line is GL, set glSegmentString (and keep ppmSegmentString = null).
-        //  - Make sure the string you put into glSegmentString is always GL11,
-        //    or you’ll keep getting “Expected GlSegmentString” schema errors.
-        //
-        // AE rules applied:
-        //  - DebitAmount/CreditAmount are generated as strings because of StrawberryShake
-        //    generated classes currently have DebitAmount/CreditAmount typed as string (even though
-        //    schema says NonNegativeFloat).
-        //  - ExternalSystemIdentifier max 10 chars
-        //  - ExternalSystemReference max 25 chars
-        //  - Glide JournalLineNumber is string in your generated code (even though schema says PositiveInt).
-        //  - Glide UdfString1/UdfString2 max 50 chars
-        private IEnumerable<GlJournalLineInput> BuildLines(FeedBatch batch, List<FeedItem> items, DateTime fallbackDate)
+        
+        private IEnumerable<GlJournalLineInput> BuildLines(FeedBatch batch, List<FeedItem> items, DateTime fallbackDate, IntegrationType integration)
         {
             var lineNo = 1;
 
-            // Precompute a stable 12-char batch short id for external refs (12 + 1 + 12 = 25)
             var batchShort12 = batch.BatchID.ToString("N").Substring(0, 12);
 
             foreach (var i in items)
             {
-                // Amount
                 var amount = Convert.ToDouble(i.TotalCharge, CultureInfo.InvariantCulture);
 
-                // Dates
                 var txDate = (i.TransactionDate == default ? fallbackDate : i.TransactionDate).Date;
                 var txDateOnly = DateOnly.FromDateTime(txDate);
 
-                // External IDs with strict max lengths
                 var recordN = i.RecordID.ToString("N");
                 var externalId10 = recordN.Substring(0, 10); // <= 10
 
                 var recordShort12 = recordN.Substring(0, 12);
                 var externalRef25 = $"{batchShort12}-{recordShort12}"; // 25 total
 
-                // Glide recommended fields
                 var udfQty = i.Quantity.HasValue ? Convert.ToDouble(i.Quantity.Value, CultureInfo.InvariantCulture) : (double?)null;
                 var udfUnitPrice = i.UnitPrice.HasValue ? Convert.ToDouble(i.UnitPrice.Value, CultureInfo.InvariantCulture) : (double?)null;
                 var udfTotal = Convert.ToDouble(i.TotalCharge, CultureInfo.InvariantCulture);
@@ -362,29 +367,17 @@ namespace CAHFS_Recharges.Services
                 var udfTestCode = SafeTrim(i.TestCode, 50);
                 var udfTestName = SafeTrim(i.TestName, 50);
 
-                var desc = BuildLineDescription(i); // max 100
+                var desc = BuildLineDescription(i, integration); // max 100
 
-                // Determine segment type for DEBIT and CREDIT separately.
-                // - If it starts with SP/CP -> PPM
-                // - Else -> GL
 
                 var debitIsPpm = IsPpm(i.DebitChartString);
                 var creditIsPpm = IsPpm(i.CreditChartString);
 
                 
-                // DEBIT line
                 yield return new GlJournalLineInput
                 {
                     DebitAmount = amount.ToString("F2", CultureInfo.InvariantCulture),
                     CreditAmount = null,
-
-                    // IMPORTANT CHANGE:
-                    // OLD: always set GlSegmentString from DebitChartString
-                    // GlSegmentString = i.DebitChartString?.Trim(),
-                    //
-                    // NEW:
-                    // - If PPM: set ppmSegmentString and keep glSegmentString = null
-                    // - If GL: set glSegmentString (forced to GL11) and keep ppmSegmentString = null
                     GlSegmentString = debitIsPpm ? null : ToGl11(i.DebitChartString),
                     PpmSegmentString = debitIsPpm ? ToPpmString(i.DebitChartString) : null,
                     PpmComment = null,
@@ -414,7 +407,6 @@ namespace CAHFS_Recharges.Services
                     DebitAmount = null,
                     CreditAmount = amount.ToString("F2", CultureInfo.InvariantCulture),
 
-                    // IMPORTANT CHANGE (same rules as DEBIT):
                     GlSegmentString = creditIsPpm ? null : ToGl11(i.CreditChartString),
                     PpmSegmentString = creditIsPpm ? ToPpmString(i.CreditChartString) : null,
                     PpmComment = null,
@@ -453,13 +445,10 @@ namespace CAHFS_Recharges.Services
             if (string.IsNullOrWhiteSpace(raw))
                 return null;
 
-            // Remove any existing dashes/spaces
             var cc = raw.Replace("-", "").Trim();
 
-            // GL11 requires 59 chars before dashing
             cc = (cc + new string('0', 59)).Substring(0, 59);
 
-            // Build strictly as GL11 and force required trailing segments
             return
                 cc.Substring(0, 4) + "-" +
                 cc.Substring(4, 5) + "-" +
@@ -485,7 +474,6 @@ namespace CAHFS_Recharges.Services
             return raw.Trim();
         }
 
-        // Helpers (string lengths, descriptions)
 
         private static string? SafeTrim(string? s, int maxLen)
         {
@@ -494,17 +482,15 @@ namespace CAHFS_Recharges.Services
             return s.Length <= maxLen ? s : s.Substring(0, maxLen);
         }
 
-        private static string BuildLineDescription(FeedItem i)
+        private static string BuildLineDescription(FeedItem i, IntegrationType integration)
         {
             var baseText = $"{i.TestCode?.Trim()} {i.TestName?.Trim()}".Trim();
             if (string.IsNullOrWhiteSpace(baseText))
-                baseText = "CAHFS Billing";
+                baseText = GetDefaultLineDescription(integration);
 
-            // AE: TrimmedString100
             return baseText.Length <= 100 ? baseText : baseText.Substring(0, 100);
         }
 
-        // Error Helpers
         private static string? NormalizeErrorMessages(string? err)
         {
             if (string.IsNullOrWhiteSpace(err)) return null;
@@ -523,7 +509,6 @@ namespace CAHFS_Recharges.Services
             return string.Join(" | ", errors.Select(e => e.Message).Where(m => !string.IsNullOrWhiteSpace(m)));
         }
 
-        // Result DTOs
         public sealed record PreviewResult(int ItemCount, int JournalLineCount, decimal DebitTotal, decimal CreditTotal, bool IsBalanced);
         public sealed record SendResult(bool Success, string Message, Guid? RequestId);
         public sealed record StatusResult(bool Success, string Message, Guid? RequestId);

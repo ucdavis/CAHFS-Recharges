@@ -1,57 +1,37 @@
-﻿<!DOCTYPE html>
+@{
+    var integration = ViewData["Integration"] as string;
+    var hasIntegration = !string.IsNullOrEmpty(integration);
+    var pageTitle = ViewData["Title"] as string ?? "CAEI";
+    
+    // Determine theme class based on integration
+    var themeClass = integration?.ToUpperInvariant() switch
+    {
+        "CAHFS" => "cahfs-theme gparc-theme",
+        "EQUINE" => "equine-theme gpare-theme",
+        _ => ""
+    };
+}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - CAHFS Aggie Enterprise</title>
+    <title>@pageTitle - CAEI</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/CAHFS_Recharges.styles.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Index">CAHFS_Recharges</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/ApiValidation">API Validation</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-page="/Staging/FeedReview">Staging Data</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-page="/Staging/EquineFeedReview"> Equine Staging Data</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-page="/Staging/SendToAggieEnterprise">Send To AE</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/hangfire" target="_blank" rel="noopener noreferrer">Hangfire</a>
-                        </li>
+<body class="@themeClass">
+    <a href="#main-content" class="visually-hidden-focusable">Skip to main content</a>
+    
+    @await Html.PartialAsync("_Header")
 
-                    </ul>
-                </div>
-            </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
+    <main id="main-content" role="main" class="@(hasIntegration ? "container-fluid py-3 px-4" : "container py-3")" tabindex="-1">
+        @RenderBody()
+    </main>
 
-    <footer class="border-top footer text-muted">
+    <footer class="caei-footer text-center">
         <div class="container">
-            
+            <small>CAHFS Aggie Enterprise Integration</small>
         </div>
     </footer>
 

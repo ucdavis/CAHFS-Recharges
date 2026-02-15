@@ -1,0 +1,198 @@
+@using CAHFS_Recharges.Models
+@using CAHFS_Recharges.Services
+@inject IWebHostEnvironment Environment
+@{
+    var integration = ViewData["Integration"] as string;
+    var hasIntegration = !string.IsNullOrEmpty(integration);
+    var isAdmin = ViewData["IsAdmin"] as bool? ?? false;
+    var username = User.Identity?.Name ?? "Guest";
+    
+    // Integration display names and theme class
+    var integrationUpper = integration?.ToUpperInvariant() ?? "";
+    var integrationDisplayName = integrationUpper switch
+    {
+        "CAHFS" => "CAHFS",
+        "EQUINE" => "EQUINE",
+        _ => integration ?? ""
+    };
+    var integrationFullName = integrationUpper switch
+    {
+        "CAHFS" => "California Animal Health & Food Safety",
+        "EQUINE" => "Equine Analytical Chemistry Laboratory",
+        _ => "Integration Workspace"
+    };
+    var integrationThemeClass = integrationUpper switch
+    {
+        "CAHFS" => "theme-cahfs",
+        "EQUINE" => "theme-equine",
+        _ => ""
+    };
+    
+    // Navigation URLs
+    IntegrationTypeExtensions.TryParse(integration, out var integrationType);
+    var stagingPage = IntegrationLinkHelper.GetStagingDataPage(integrationType);
+    var coaValidationPage = IntegrationLinkHelper.GetCoaValidationPage(integrationType);
+    var sentHistoryPage = IntegrationLinkHelper.GetSentHistoryPage(integrationType);
+    var manualSendPage = IntegrationLinkHelper.GetManualSendPage(integrationType);
+    
+    // Current page for active tab detection
+    var currentPath = Context.Request.Path.Value?.ToLowerInvariant() ?? "";
+    var isStaging = currentPath.Contains("feedreview") || (currentPath.Contains("staging") && !currentPath.Contains("coa") && !currentPath.Contains("send"));
+    var isCoa = currentPath.Contains("coavalidation");
+    var isHistory = currentPath.Contains("history") || currentPath.Contains("senthistory");
+    var isSend = currentPath.Contains("sendtoaggieenterprise") || currentPath.Contains("send");
+}
+
+<header class="caei-header-wrapper @integrationThemeClass">
+    @if (hasIntegration)
+    {
+        @* ===== WORKSPACE HEADER (React Full Layout) ===== *@
+        <div class="caei-header-top">
+            <div class="caei-header-container">
+                <div class="caei-header-content">
+                    @* Top Bar: Back | Separator | Integration Info | User Info *@
+                    <div class="caei-header-bar">
+                        @* Left Section: Back + Separator + Integration *@
+                        <div class="caei-header-left">
+                            <a href="/Home" class="caei-btn-outline" aria-label="Back to Home">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                                </svg>
+                                Back to Home
+                            </a>
+                            
+                            <div class="caei-separator" aria-hidden="true"></div>
+                            
+                            <div class="caei-integration-group">
+                                <div class="caei-integration-icon @(integrationUpper == "EQUINE" ? "equine" : "cahfs")" aria-hidden="true">
+                                    @if (integrationUpper == "EQUINE")
+                                    {
+                                        @* Activity icon for EQUINE *@
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                        </svg>
+                                    }
+                                    else
+                                    {
+                                        @* Database icon for CAHFS *@
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                                        </svg>
+                                    }
+                                </div>
+                                <div class="caei-integration-text">
+                                    <p class="caei-integration-title">@integrationDisplayName → AE</p>
+                                    <p class="caei-integration-subtitle">Integration Workspace</p>
+                                </div>
+                                <span class="caei-badge @(integrationUpper == "EQUINE" ? "equine" : "cahfs")">@integrationDisplayName</span>
+                            </div>
+                        </div>
+                        
+                        @* Right Section: User Info + Logout *@
+                        <div class="caei-header-right">
+                            @if (User.Identity?.IsAuthenticated == true)
+                            {
+                                <div class="caei-user-block">
+                                    <span class="caei-user-label">Logged in as</span>
+                                    <span class="caei-user-name">@username</span>
+                                </div>
+                                <a href="/Login" class="caei-btn-outline">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                                    </svg>
+                                    Log Out
+                                </a>
+                            }
+                        </div>
+                    </div>
+                    
+                    @* Navigation Tabs (Pill/Button Style) *@
+                    <nav class="caei-nav" role="navigation" aria-label="Workspace navigation">
+                        <a href="@stagingPage" class="caei-nav-pill @(isStaging ? "active" : "")">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                            </svg>
+                            Staging Data
+                        </a>
+                        <a href="@coaValidationPage" class="caei-nav-pill @(isCoa ? "active" : "")">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            COA Validations
+                        </a>
+                        <a href="@sentHistoryPage" class="caei-nav-pill @(isHistory ? "active" : "")">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Sent History
+                        </a>
+                        <a href="@manualSendPage" class="caei-nav-pill @(isSend ? "active" : "")">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                            </svg>
+                            Send to AE
+                        </a>
+                        @if (isAdmin)
+                        {
+                            <a href="/hangfire" class="caei-nav-pill">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                </svg>
+                                Hangfire
+                                <span class="caei-admin-badge">Admin</span>
+                            </a>
+                        }
+                    </nav>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* ===== HOME PAGE HEADER (React Full Layout) ===== *@
+        <div class="caei-header-home">
+            <div class="caei-header-container">
+                <div class="caei-header-bar">
+                    @* Left: App Icon + Title *@
+                    <div class="caei-header-left">
+                        <div class="caei-app-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div class="caei-app-text">
+                            <p class="caei-app-title">CAHFS AE Integration</p>
+                            <p class="caei-app-subtitle">California Animal Health and Food Safety</p>
+                        </div>
+                    </div>
+                    
+                    @* Right: User Info + Logout *@
+                    <div class="caei-header-right">
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <div class="caei-user-block">
+                                <span class="caei-user-label">Logged in as</span>
+                                <span class="caei-user-name">@username</span>
+                            </div>
+                            <a href="/Login" class="caei-btn-outline">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                                </svg>
+                                Log Out
+                            </a>
+                        }
+                        else
+                        {
+                            <a href="/Login" class="caei-btn-outline">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                                </svg>
+                                Log In
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</header>

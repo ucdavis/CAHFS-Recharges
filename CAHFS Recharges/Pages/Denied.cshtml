@@ -1,9 +1,39 @@
-﻿@page
+@page
 @model CAHFS_Recharges.Pages.DeniedModel
 @{
-    ViewData["Title"] = "Access Denied";
+    ViewData["Title"] = Model.Title;
 }
 
-<div class="text-center">
-    <h1 class="display-4">Access Denied</h1>
+<div class="container py-5">
+    <h1 class="visually-hidden">@Model.Title</h1>
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h2 class="h5 mb-0">
+                        <span class="me-2" aria-hidden="true">🔒</span> @Model.Title
+                    </h2>
+                </div>
+                <div class="card-body text-center py-4">
+                    <div class="mb-3">
+                        <span class="caei-emoji-xl" aria-hidden="true">🚫</span>
+                    </div>
+                    <p class="h5 text-danger mb-0">@Model.Message</p>
+                    <p class="text-muted mb-4">@Model.Details</p>
+                    
+                    <div class="d-flex justify-content-center gap-2">
+                        <a asp-page="/Home" class="btn btn-primary">
+                            <span class="me-1">🏠</span> Go to Home
+                        </a>
+                        <a href="javascript:history.back()" class="btn btn-outline-secondary">
+                            <span class="me-1">←</span> Go Back
+                        </a>
+                    </div>
+                </div>
+                <div class="card-footer text-muted small">
+                    <strong>Your username:</strong> @(User.Identity?.Name ?? "Not authenticated")
+                </div>
+            </div>
+        </div>
+    </div>
 </div>

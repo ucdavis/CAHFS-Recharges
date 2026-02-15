@@ -44,6 +44,12 @@ namespace CAHFS_Recharges.Models
         [Column("clientID")]
         public string? ClientID { get; set; }
 
+        [Column("Client_Name")]
+        public string? ClientName { get; set; }
+
+        [Column("Organization_Name")]
+        public string? OrganizationName { get; set; }
+
         [Column("systemID")]
         public int SystemID { get; set; }
 

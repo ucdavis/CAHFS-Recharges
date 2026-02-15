@@ -1,29 +1,20 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
-using CAHFS_Recharges.Data;
+using CAHFS_Recharges.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace CAHFS_Recharges.Services
 {
-    /// <summary>
-    /// Gatekeeper for "Send to Aggie Enterprise" action.
-    /// Rules:
-    ///  1) Batch must be Ready
-    ///  2) No pending validations (NULL DebitStringValid/CreditStringValid)
-    ///  3) No invalid COAs
-    ///  4) (Strict) every item must have DebitStringValid='Valid' AND CreditStringValid='Valid'
-    /// </summary>
     public sealed class AggieEnterpriseSendGatekeeper
     {
-        private readonly FinancialContext _db;
+        private readonly IIntegrationDbResolver _dbResolver;
 
-        public AggieEnterpriseSendGatekeeper(FinancialContext db)
+        public AggieEnterpriseSendGatekeeper(IIntegrationDbResolver dbResolver)
         {
-            _db = db;
+            _dbResolver = dbResolver;
         }
 
-        // NOTE: Upload service should use result.CanSend (NOT .Allowed)
         public sealed record GateResult(bool CanSend, string Message, GateSummary? Summary = null);
 
         public sealed record GateSummary(
@@ -35,12 +26,13 @@ namespace CAHFS_Recharges.Services
             int NotValidCount
         );
 
-        public async Task<GateResult> CanSendBatchAsync(Guid batchId, CancellationToken ct = default)
+        public async Task<GateResult> CanSendBatchAsync(Guid batchId, IntegrationType integration, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
 
-            // Read batch status
-            var batchStatus = await _db.FeedBatches
+            var feedBatches = _dbResolver.GetFeedBatches(integration);
+
+            var batchStatus = await feedBatches
                 .AsNoTracking()
                 .Where(b => b.BatchID == batchId)
                 .Select(b => b.AERequestStatus)
@@ -49,8 +41,7 @@ namespace CAHFS_Recharges.Services
             if (batchStatus == null)
                 return new GateResult(false, "Batch not found.", new GateSummary(batchId, null, 0, 0, 0, 0));
 
-            // Summary counts (single round-trip)
-            var summary = await BuildSummaryAsync(batchId, batchStatus, ct);
+            var summary = await BuildSummaryAsync(batchId, batchStatus, integration, ct);
 
             // Rule 1: Batch must be Ready
             if (!string.Equals(batchStatus, "Ready", StringComparison.OrdinalIgnoreCase))
@@ -95,12 +86,14 @@ namespace CAHFS_Recharges.Services
             return new GateResult(true, "OK: Batch is Ready to send to Aggie Enterprise.", summary);
         }
 
-        private async Task<GateSummary> BuildSummaryAsync(Guid batchId, string? batchStatus, CancellationToken ct)
+        private async Task<GateSummary> BuildSummaryAsync(Guid batchId, string? batchStatus, IntegrationType integration, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
 
+            var feedItems = _dbResolver.GetFeedItems(integration);
+
             // One query -> all counts
-            var agg = await _db.FeedItems
+            var agg = await feedItems
                 .AsNoTracking()
                 .Where(i => i.BatchID == batchId)
                 .GroupBy(_ => 1)

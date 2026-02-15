@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Diagnostics;
@@ -12,11 +13,14 @@ namespace CAHFS_Recharges.Pages
 
         public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
 
+        public bool IsDevelopment { get; set; }
+
         private readonly ILogger<ErrorModel> _logger;
 
-        public ErrorModel(ILogger<ErrorModel> logger)
+        public ErrorModel(ILogger<ErrorModel> logger, IWebHostEnvironment env)
         {
             _logger = logger;
+            IsDevelopment = env.IsDevelopment();
         }
 
         public void OnGet()

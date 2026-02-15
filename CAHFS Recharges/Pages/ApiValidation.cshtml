@@ -1,4 +1,4 @@
-﻿@page
+@page
 @using CAHFS.GraphQl
 @model CAHFS_Recharges.Pages.ApiValidationModel
 @{
@@ -24,12 +24,12 @@
 <form method="get" class="mb-3">
     <div class="row">
         <div class="col-md-6">
-            <label class="form-label">Chart 1</label>
-            <input class="form-control" name="Chart1" value="@Model.Chart1" />
+            <label for="chart1" class="form-label">Chart 1</label>
+            <input id="chart1" class="form-control" name="Chart1" value="@Model.Chart1" />
         </div>
         <div class="col-md-6">
-            <label class="form-label">Chart 2</label>
-            <input class="form-control" name="Chart2" value="@Model.Chart2" />
+            <label for="chart2" class="form-label">Chart 2</label>
+            <input id="chart2" class="form-control" name="Chart2" value="@Model.Chart2" />
         </div>
     </div>
     <button type="submit" class="btn btn-primary mt-2">Validate</button>
@@ -59,9 +59,7 @@
 
 <hr />
 
-@* ===========================
-   CHART 1
-=========================== *@
+@*  CHART 1 *@
 <div class="mb-3">
     <h4>Chart String 1</h4>
 
@@ -166,9 +164,7 @@
 
 <hr />
 
-@* ===========================
-   CHART 2
-=========================== *@
+@* CHART 2 *@
 <div class="mb-3">
     <h4>Chart String 2</h4>
 

@@ -1,0 +1,37 @@
+@using CAHFS_Recharges.Models
+@using CAHFS_Recharges.Services
+@* Quick Navigation buttons for Staging Data pages *@
+@{
+    var integrationStr = ViewData["Integration"] as string;
+    IntegrationTypeExtensions.TryParse(integrationStr, out var integration);
+    
+    var stagingPage = IntegrationLinkHelper.GetStagingDataPage(integration);
+    var manualSendPage = IntegrationLinkHelper.GetManualSendPage(integration);
+    var sentHistoryPage = IntegrationLinkHelper.GetSentHistoryPage(integration);
+    var invalidItems = ViewData["InvalidItems"] as int? ?? 0;
+}
+
+<div class="d-flex flex-wrap gap-2 mb-4">
+    <span class="text-muted align-self-center me-2">Quick Actions:</span>
+    
+    @if (invalidItems > 0)
+    {
+        <a asp-page="@stagingPage" asp-route-ShowInvalidOnly="true" class="btn btn-outline-danger btn-sm">
+            ⚠️ COA Fix (@invalidItems Invalid)
+        </a>
+    }
+    else
+    {
+        <span class="btn btn-outline-secondary btn-sm disabled">
+            ✓ No Invalid COA
+        </span>
+    }
+    
+    <a asp-page="@sentHistoryPage" class="btn btn-outline-secondary btn-sm">
+        📋 Sent History
+    </a>
+    
+    <a asp-page="@manualSendPage" class="btn btn-outline-primary btn-sm">
+        📤 Send to AE
+    </a>
+</div>

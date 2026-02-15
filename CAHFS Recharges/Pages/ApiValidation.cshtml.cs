@@ -104,7 +104,7 @@ namespace CAHFS_Recharges.Pages
                     accountingDate: null
                 );
 
-                ViewData["ErpChartValidation2"] = op2.Data; // .Data
+                ViewData["ErpChartValidation2"] = op2.Data; 
                 ViewData["ErpChartValidation2Input"] = input2;
                 ViewData["ErpChartValidation2Errors"] = op2.Errors?
                     .Select(e => $"{e.Message} | Ext={DumpExtensions(e.Extensions)}")

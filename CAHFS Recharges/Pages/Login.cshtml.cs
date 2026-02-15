@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using System.Net;
-using System.Runtime;
 
 namespace CAHFS_Recharges.Pages
 {
@@ -28,9 +27,8 @@ namespace CAHFS_Recharges.Pages
             }
 
             var redirectUrl = HttpHelper.GetRootURL() + new PathString("/CasLogin");
-            var authorizationEndpoint = _settings.CasBaseUrl + "login?service=" + 
+            var authorizationEndpoint = _settings.CasBaseUrl + "login?service=" +
                 WebUtility.UrlEncode(redirectUrl + "?ReturnUrl=" + WebUtility.UrlEncode(returnURL));
-
 
             return new RedirectResult(authorizationEndpoint);
         }

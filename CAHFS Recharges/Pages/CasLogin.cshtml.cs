@@ -29,7 +29,14 @@ namespace CAHFS_Recharges.Pages
             // get ticket & service
             string? ticket = Request.Query[_strTicket];
             string? returnUrl = Request.Query["ReturnUrl"];
-            string service = WebUtility.UrlEncode(HttpHelper.GetRootURL() + Request.Path + "?ReturnUrl=" + WebUtility.UrlEncode(returnUrl));
+
+            // No ticket (e.g. user clicked app link on CAS logout success page) → send to Login to start fresh
+            if (string.IsNullOrWhiteSpace(ticket))
+            {
+                return RedirectToPage("/Login", new { ReturnUrl = returnUrl });
+            }
+
+            string service = WebUtility.UrlEncode(HttpHelper.GetRootURL() + Request.Path + "?ReturnUrl=" + WebUtility.UrlEncode(returnUrl ?? ""));
             var client = _clientFactory.CreateClient("CAS");
 
             try
@@ -74,7 +81,9 @@ namespace CAHFS_Recharges.Pages
                     var user = new ClaimsPrincipal(claimsIdentity);
                     await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, user);
 
-                    return new LocalRedirectResult(!string.IsNullOrWhiteSpace(returnUrl) ? returnUrl : "/");
+                    // Redirect to Home for integration selection, unless specific return URL requested
+                    var redirectUrl = !string.IsNullOrWhiteSpace(returnUrl) ? returnUrl : "/Home";
+                    return new LocalRedirectResult(redirectUrl);
                 }
             }
             catch (TaskCanceledException ex)

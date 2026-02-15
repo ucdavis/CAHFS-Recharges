@@ -15,11 +15,8 @@ namespace CAHFS_Recharges.Models
         private static IAuthorizationService? authorizationService;
         private static IDataProtectionProvider? dataProtectionProvider;
 
-        // Settings from appsettings.json or AWS Parameter Store
         public static IConfiguration? Settings { get; private set; }
-        // The current environment (Development, Test, Production)
         public static IWebHostEnvironment? Environment { get; private set; }
-        // Get the current HttpContext
         public static HttpContext? HttpContext
         {
             get
@@ -34,12 +31,8 @@ namespace CAHFS_Recharges.Models
                 }
             }
         }
-        // Memory Cache, if needed
         public static IMemoryCache? Cache { get; private set; }
 
-        // <summary>
-        /// Helper functions constructor (gets injected with the memeory cache object)
-        /// </summary>
         /// <param name="memoryCache"></param>
         public static void Configure(IMemoryCache? memoryCache, IConfiguration? configurationSettings, IWebHostEnvironment env, IHttpContextAccessor? httpContextAccessor, IAuthorizationService? authorizationService, IDataProtectionProvider? dataProtectionProvider)
         {
@@ -51,9 +44,7 @@ namespace CAHFS_Recharges.Models
             HttpHelper.dataProtectionProvider = dataProtectionProvider;
         }
 
-        /// <summary>
         /// Helper function to return a setting, including a null check for Settings
-        /// </summary>
         /// <typeparam name="T">Type of setting to be returned, e.g. string</typeparam>
         /// <param name="section">Section for Settings.GetSection()</param>
         /// <param name="setting">Setting for section.GetValue<T>()</param>
@@ -69,9 +60,7 @@ namespace CAHFS_Recharges.Models
                 : Settings.GetSection(section).GetValue<T>(setting);
         }
 
-        /// <summary>
         /// Gets the root URL including protocol and port for the app
-        /// </summary>
         public static string GetRootURL()
         {
             string rootURL = string.Empty;

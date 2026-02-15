@@ -36,9 +36,7 @@ namespace CAHFS_Recharges.Pages
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Error accessing database");
-                _logger.Error(ex, ex.Message);
-
+                _logger.Error(ex, "Error accessing StarLIMS database: {Message}", ex.Message);
                 ViewData["SLErrorMessage"] = ex.Message;
             }
 
@@ -49,9 +47,7 @@ namespace CAHFS_Recharges.Pages
             }
             catch (Exception ex2)
             {
-                _logger.Error(ex2, "Error accessing database");
-                _logger.Error(ex2, ex2.Message);
-
+                _logger.Error(ex2, "Error accessing Financial database: {Message}", ex2.Message);
                 ViewData["GPErrorMessage"] = ex2.Message;
             }
 

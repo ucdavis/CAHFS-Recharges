@@ -1,34 +1,54 @@
-﻿@page
+@page
 @model IndexModel
 @{
-    ViewData["Title"] = "Home page";
-    var user = ViewData["User"];
+    ViewData["Title"] = "CAEI - CAHFS Aggie Enterprise Integration";
+    var user = ViewData["User"] as string;
+    var isAuthenticated = User.Identity?.IsAuthenticated == true;
     var canAccessSLDatabase = ViewData["canAccessSLDatabase"];
     var canAccessGPDatabase = ViewData["canAccessGPDatabase"];
     var sLErrorMessage = ViewData["SLErrorMessage"];
     var gPErrorMessage = ViewData["GPErrorMessage"];
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome @user</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-    @if (canAccessSLDatabase == null || !(bool)canAccessSLDatabase)
+<div class="container">
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-8 text-center">
+            <h1 class="display-4 mb-4">CAEI</h1>
+            <p class="lead">CAHFS Aggie Enterprise Integration</p>
+
+            @if (isAuthenticated)
+            {
+                <p class="mb-4">Welcome back, <strong>@user</strong></p>
+                <a asp-page="/Home" class="btn btn-primary btn-lg">Go to Dashboard</a>
+            }
+            else
+            {
+                <p class="mb-4">Please log in to access the application.</p>
+                <a asp-page="/Login" class="btn btn-primary btn-lg">Login with CAS</a>
+            }
+        </div>
+    </div>
+
+    @* Database status for authenticated users (diagnostic info) *@
+    @if (isAuthenticated)
     {
-        <p style="color: maroon; font-weight: bold;">
-            Cannot connect to SL database
-        </p>
-        <p>
-            @sLErrorMessage
-        </p>
-    }
-    @if (canAccessGPDatabase == null || !(bool)canAccessGPDatabase)
-    {
-        <p style="color: maroon; font-weight: bold;">
-            Cannot connect to GP database
-        </p>
-        <p>
-            @gPErrorMessage
-        </p>
+        <div class="row justify-content-center mt-5">
+            <div class="col-md-6">
+                @if (canAccessSLDatabase != null && !(bool)canAccessSLDatabase)
+                {
+                    <div class="alert alert-danger">
+                        <strong>StarLIMS Database:</strong> Connection failed
+                        <br /><small>@sLErrorMessage</small>
+                    </div>
+                }
+                @if (canAccessGPDatabase != null && !(bool)canAccessGPDatabase)
+                {
+                    <div class="alert alert-danger">
+                        <strong>Financial Database:</strong> Connection failed
+                        <br /><small>@gPErrorMessage</small>
+                    </div>
+                }
+            </div>
+        </div>
     }
 </div>
-

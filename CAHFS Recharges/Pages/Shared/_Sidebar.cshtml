@@ -1,0 +1,131 @@
+@using CAHFS_Recharges.Models
+@using CAHFS_Recharges.Services
+@{
+    var integrationStr = ViewData["Integration"] as string;
+    var isAdmin = ViewData["IsAdmin"] as bool? ?? false;
+    var useRouteBased = IntegrationLinkHelper.UseRouteBased;
+    
+    // Parse integration and get page URLs
+    IntegrationTypeExtensions.TryParse(integrationStr, out var integration);
+    var stagingPage = IntegrationLinkHelper.GetStagingDataPage(integration);
+    var manualSendPage = IntegrationLinkHelper.GetManualSendPage(integration);
+    var coaValidationPage = IntegrationLinkHelper.GetCoaValidationPage(integration);
+    var sentHistoryPage = IntegrationLinkHelper.GetSentHistoryPage(integration);
+    
+    // Current page for active state
+    var currentPath = Context.Request.Path.Value?.ToLowerInvariant() ?? "";
+}
+
+<nav class="caei-sidebar" role="navigation" aria-label="Sidebar navigation">
+    <div class="sidebar-heading">Workspace</div>
+    <ul class="nav flex-column">
+        <li class="nav-item">
+            @{
+                var stagingActive = currentPath.Contains("feedreview") || currentPath.Contains("staging/feedreview");
+                var stagingClass = stagingActive ? "nav-link active" : "nav-link";
+            }
+            @if (useRouteBased)
+            {
+                <a class="@stagingClass" href="@stagingPage">
+                    <span class="nav-icon" aria-hidden="true">📊</span>
+                    Staging Data
+                </a>
+            }
+            else
+            {
+                <a class="@stagingClass" asp-page="@stagingPage">
+                    <span class="nav-icon" aria-hidden="true">📊</span>
+                    Staging Data
+                </a>
+            }
+        </li>
+        <li class="nav-item">
+            @{
+                var coaActive = currentPath.Contains("coavalidation");
+                var coaClass = coaActive ? "nav-link active" : "nav-link";
+            }
+            @if (useRouteBased)
+            {
+                <a class="@coaClass" href="@coaValidationPage">
+                    <span class="nav-icon" aria-hidden="true">✓</span>
+                    COA Validations
+                </a>
+            }
+            else
+            {
+                <a class="@coaClass" asp-page="@coaValidationPage">
+                    <span class="nav-icon" aria-hidden="true">✓</span>
+                    COA Validations
+                </a>
+            }
+        </li>
+        <li class="nav-item">
+            @{
+                var historyActive = currentPath.Contains("senthistory") || currentPath.Contains("history");
+                var historyClass = historyActive ? "nav-link active" : "nav-link";
+            }
+            @if (useRouteBased)
+            {
+                <a class="@historyClass" href="@sentHistoryPage">
+                    <span class="nav-icon" aria-hidden="true">📋</span>
+                    Sent History
+                </a>
+            }
+            else
+            {
+                <a class="@historyClass" asp-page="@sentHistoryPage">
+                    <span class="nav-icon" aria-hidden="true">📋</span>
+                    Sent History
+                </a>
+            }
+        </li>
+        <li class="nav-item">
+            @{
+                var sendActive = currentPath.Contains("sendtoaggieenterprise") || currentPath.Contains("manualsend");
+                var sendClass = sendActive ? "nav-link active" : "nav-link";
+            }
+            @if (useRouteBased)
+            {
+                <a class="@sendClass" href="@manualSendPage">
+                    <span class="nav-icon" aria-hidden="true">📤</span>
+                    Send to AE
+                </a>
+            }
+            else
+            {
+                <a class="@sendClass" asp-page="@manualSendPage">
+                    <span class="nav-icon" aria-hidden="true">📤</span>
+                    Send to AE
+                </a>
+            }
+        </li>
+    </ul>
+
+    <div class="sidebar-heading">Tools</div>
+    <ul class="nav flex-column">
+        <li class="nav-item">
+            @{
+                var apiActive = currentPath.Contains("apivalidation");
+                var apiClass = apiActive ? "nav-link active" : "nav-link";
+            }
+            <a class="@apiClass" asp-page="/ApiValidation">
+                <span class="nav-icon" aria-hidden="true">🔍</span>
+                API Validation
+            </a>
+        </li>
+    </ul>
+
+    @if (isAdmin)
+    {
+        <div class="sidebar-heading">Admin</div>
+        <ul class="nav flex-column">
+            <li class="nav-item">
+                <a class="nav-link" href="/hangfire" aria-describedby="hangfire-note">
+                    <span class="nav-icon" aria-hidden="true">⚙️</span>
+                    Hangfire Dashboard
+                </a>
+                <span id="hangfire-note" class="visually-hidden">Opens Hangfire dashboard (may open in same window)</span>
+            </li>
+        </ul>
+    }
+</nav>

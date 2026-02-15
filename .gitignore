@@ -475,3 +475,9 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# Cursor IDE rules (local only, do not push)
+.cursor/
+
+# Project docs (local only, do not push)
+CAHFS Recharges/Docs/

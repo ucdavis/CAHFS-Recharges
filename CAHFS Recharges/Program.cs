@@ -1,7 +1,9 @@
 using Amazon;
 using Amazon.Extensions.NETCore.Setup;
 using Amazon.Runtime.CredentialManagement;
+using CAHFS_Recharges.Authorization;
 using CAHFS_Recharges.Data;
+using CAHFS_Recharges.Middleware;
 using CAHFS_Recharges.Models;
 using CAHFS_Recharges.Services;
 using Hangfire;
@@ -110,7 +112,21 @@ try
     // Authorization policies
     builder.Services.AddAuthorization(options =>
     {
+        // Legacy policy (kept for backwards compatibility)
         options.AddPolicy("CAHFSUser", policy => policy.RequireClaim(ClaimTypes.AuthenticationMethod, "CAS"));
+
+        // CAEI role-based policies
+        options.AddPolicy(CaeiPolicies.ViewerPolicy, policy =>
+            policy.RequireAuthenticatedUser()
+                  .AddRequirements(new RoleRequirement(CaeiRoles.Viewer)));
+
+        options.AddPolicy(CaeiPolicies.OperatorPolicy, policy =>
+            policy.RequireAuthenticatedUser()
+                  .AddRequirements(new RoleRequirement(CaeiRoles.Operator)));
+
+        options.AddPolicy(CaeiPolicies.AdminPolicy, policy =>
+            policy.RequireAuthenticatedUser()
+                  .AddRequirements(new RoleRequirement(CaeiRoles.Admin)));
 
         options.DefaultPolicy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
@@ -121,6 +137,9 @@ try
                 .ToArray())
             .Build();
     });
+
+    // Role-based authorization handler
+    builder.Services.AddSingleton<IAuthorizationHandler, ConfigBasedRoleHandler>();
 
     // CSP nonces
     builder.Services.AddCsp(nonceByteAmount: 32);
@@ -239,16 +258,26 @@ try
 
     // CAHFS Services
 
+    // Integration Context
+    builder.Services.AddScoped<IIntegrationContextService, IntegrationContextService>();
+
+    // Integration DbContext Resolver (for unified services)
+    builder.Services.AddScoped<IIntegrationDbResolver, IntegrationDbResolver>();
+
     // COA Validation
     builder.Services.AddScoped<StagingCoaValidationService>();
 
-    // Ready to Send service
+    // Ready to Send Gatekeeper (unified for CAHFS + EQUINE via IIntegrationDbResolver)
     builder.Services.AddScoped<AggieEnterpriseSendGatekeeper>();
 
-    // Journal creation and Upload service
+    // Journal creation and Upload service (unified for CAHFS + EQUINE via IIntegrationDbResolver)
     builder.Services.AddScoped<AggieEnterpriseJournalUploadService>();
 
     var app = builder.Build();
+
+    // Configure integration link helper (route-based vs legacy pages)
+    // Set "CAEI:UseRouteBased" in appsettings.json to false to use legacy pages
+    IntegrationLinkHelper.Configure(builder.Configuration);
 
     // CSP
     app.UseCsp(csp =>
@@ -297,6 +326,9 @@ try
     app.UseCookiePolicy();
     app.UseSession();
 
+    // Redirect legacy URLs to route-based so old bookmarks do not 404 (Phase 2)
+    app.UseMiddleware<LegacyIntegrationRedirectMiddleware>();
+
     app.MapRazorPages();
 
     // Setup HTTP Helper
@@ -313,6 +345,7 @@ try
         // Dashboard (middleware). Auth is enforced by your HangfireAuthorizationFilter + global auth middleware.
         app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
         {
+            AppPath = "/Home", // "Back to site" link target
             Authorization = new Hangfire.Dashboard.IDashboardAuthorizationFilter[]
             {
                 new CAHFS_Recharges.Services.HangfireAuthorizationFilter()

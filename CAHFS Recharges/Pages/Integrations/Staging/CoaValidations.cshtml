@@ -1,0 +1,480 @@
+@page "/Integrations/{integration}/Staging/CoaValidations"
+@model CAHFS_Recharges.Pages.Integrations.Staging.CoaValidationsModel
+@{
+    ViewData["Title"] = "COA Validations";
+    var isOperator = ViewData["IsOperator"] as bool? ?? false;
+    var integration = ViewData["Integration"] as string ?? "CAHFS";
+    
+    // Trim values to handle trailing spaces from database
+    var debitStatus = Model.CurrentItem?.DebitStringValid?.Trim();
+    var creditStatus = Model.CurrentItem?.CreditStringValid?.Trim();
+    
+    // For display badges - show Valid badge if value is "Valid"
+    var debitIsValid = debitStatus == "Valid";
+    var creditIsValid = creditStatus == "Valid";
+    
+    // For correction form - show input if NOT valid (Invalid, null, or any other value)
+    var debitNeedsCorrection = debitStatus != "Valid";
+    var creditNeedsCorrection = creditStatus != "Valid";
+}
+
+@* ===== PAGE HEADER ===== *@
+<div class="mb-4">
+    <h1 class="h3 mb-1">COA Validations</h1>
+    <p class="text-muted mb-0">Manually fix and validate invalid Chart of Accounts</p>
+</div>
+
+@* ===== MESSAGES ===== *@
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @Model.SuccessMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @Model.ErrorMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.InfoMessage))
+{
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        @Model.InfoMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@* ===== SUMMARY STATS (3 compact cards) ===== *@
+<div class="staging-stats-grid mb-4 caei-stats-grid-3">
+    <div class="staging-stat-card has-warning">
+        <div class="d-flex align-items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-danger"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span class="staging-stat-value text-danger">@Model.InvalidItemCount</span>
+        </div>
+        <div class="staging-stat-label">Invalid Items</div>
+    </div>
+
+    <div class="staging-stat-card caei-staging-warning">
+        <div class="d-flex align-items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span class="staging-stat-value">@Model.InvalidBatchCount</span>
+        </div>
+        <div class="staging-stat-label">Invalid Batches</div>
+    </div>
+
+    <div class="staging-stat-card has-success">
+        <div class="d-flex align-items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-success"><polyline points="20 6 9 17 4 12"/></svg>
+            <span class="staging-stat-value text-success">@Model.CorrectedTodayCount</span>
+        </div>
+        <div class="staging-stat-label">Corrected Today</div>
+    </div>
+</div>
+
+@if (!isOperator)
+{
+    <div class="alert alert-warning mb-4">
+        <strong>View Only:</strong> You have Viewer access. Edit actions require Operator permissions.
+    </div>
+}
+
+@if (Model.InvalidItemCount == 0)
+{
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3DAE2B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-3"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <h4 class="text-success">All Clear!</h4>
+            <p class="text-muted mb-0">No invalid COA items found. All chartstrings have been validated successfully.</p>
+        </div>
+    </div>
+}
+else
+{
+    var selectedBatch = Model.InvalidBatches.FirstOrDefault(b => b.BatchID == Model.SelectedBatchId);
+    var selectedDisplayText = selectedBatch != null 
+        ? $"{selectedBatch.AEJournalName} ({selectedBatch.BatchID.ToString().Substring(0, 8)}...) - {selectedBatch.AERequestStatus ?? "Pending"}"
+        : "Select a batch...";
+        
+    @* ===== BATCH PICKER ===== *@
+    <div class="card mb-3">
+        <div class="card-body">
+            <label class="form-label">Select Batch with Invalid Items</label>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" 
+                        type="button" 
+                        id="batchDropdown" 
+                        data-bs-toggle="dropdown" 
+                        aria-expanded="false">
+                    <span>@selectedDisplayText</span>
+                </button>
+                <ul class="dropdown-menu w-100 caei-scroll-y-300" aria-labelledby="batchDropdown">
+                    @foreach (var batch in Model.InvalidBatches)
+                    {
+                        var displayText = $"{batch.AEJournalName} ({batch.BatchID.ToString().Substring(0, 8)}...)";
+                        var isSelected = Model.SelectedBatchId == batch.BatchID;
+                        var badgeClass = batch.AERequestStatus switch
+                        {
+                            "Needs Review" => "bg-warning text-dark",
+                            "ERROR" => "bg-danger",
+                            _ => "bg-secondary"
+                        };
+                        <li>
+                            <a class="dropdown-item @(isSelected ? "active" : "")" 
+                               href="/Integrations/@integration/Staging/CoaValidations?SelectedBatchId=@batch.BatchID&CurrentItemIndex=0#item-details">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>@displayText</span>
+                                    <span class="badge @badgeClass ms-2">@(batch.AERequestStatus ?? "Pending")</span>
+                                </div>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+
+
+    @if (Model.CurrentItem != null)
+    {
+        @* ===== ITEM NAVIGATOR ===== *@
+        <div class="card mb-3">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    @if (Model.HasPrevious)
+                    {
+                        <a href="/Integrations/@integration/Staging/CoaValidations?SelectedBatchId=@Model.SelectedBatchId&CurrentItemIndex=@(Model.CurrentItemIndex - 1)" class="btn btn-outline-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                            Previous
+                        </a>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-outline-secondary" disabled title="First item" aria-label="Previous (first item)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                            Previous
+                        </button>
+                    }
+                    <div class="text-center">
+                        <div class="text-muted small">Item</div>
+                        <div class="fw-semibold">@(Model.CurrentItemIndex + 1) of @Model.TotalItemsInBatch</div>
+                    </div>
+                    @if (Model.HasNext)
+                    {
+                        <a href="/Integrations/@integration/Staging/CoaValidations?SelectedBatchId=@Model.SelectedBatchId&CurrentItemIndex=@(Model.CurrentItemIndex + 1)" class="btn btn-outline-secondary">
+                            Next
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </a>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-outline-secondary" disabled title="Last item" aria-label="Next (last item)">
+                            Next
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* ===== CURRENT ITEM DETAILS ===== *@
+        <div class="card mb-3">
+            <div class="card-body">
+                @* Section: Item Information *@
+                <h5 class="mb-3">Current Item Information</h5>
+                @{
+                    var clientId = Model.CurrentItem.ClientID?.Trim();
+                    var clientNameOrOrg = Model.CurrentItem.ClientName ?? Model.CurrentItem.OrganizationName;
+                    var clientNameOrOrgTrim = clientNameOrOrg?.Trim();
+                    var clientDisplay = string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientNameOrOrgTrim) ? "-"
+                        : string.IsNullOrEmpty(clientId) ? clientNameOrOrgTrim
+                        : string.IsNullOrEmpty(clientNameOrOrgTrim) ? clientId
+                        : $"{clientId} – {clientNameOrOrgTrim}";
+                    var testCode = Model.CurrentItem.TestCode?.Trim();
+                    var testName = Model.CurrentItem.TestName?.Trim();
+                    var testDisplay = string.IsNullOrEmpty(testCode) && string.IsNullOrEmpty(testName) ? "-"
+                        : string.IsNullOrEmpty(testCode) ? testName
+                        : string.IsNullOrEmpty(testName) ? testCode
+                        : $"{testCode} – {testName}";
+                }
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3 col-6">
+                        <div class="text-muted small">Client</div>
+                        <div>@clientDisplay</div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="text-muted small">Test</div>
+                        <div>@testDisplay</div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="text-muted small">Document #</div>
+                        <div>@(Model.CurrentItem.OrignalDocNumber ?? "-")</div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="text-muted small">Amount</div>
+                        <div>$@Model.CurrentItem.TotalCharge.ToString("N2")</div>
+                    </div>
+                </div>
+
+                @* Section: Current COA *@
+                <div class="border-top pt-4 mb-4">
+                    <h5 class="mb-3">Current COA</h5>
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label for="current-debit-coa" class="form-label text-muted">Debit COA</label>
+                            <div class="d-flex align-items-start gap-2">
+                                <input type="text" 
+                                       id="current-debit-coa"
+                                       class="form-control font-mono caei-flex-1 @(!debitIsValid ? "border-danger" : "")" 
+                                       value="@(Model.CurrentItem.DebitChartString ?? "-")" 
+                                       disabled
+                                       aria-label="Current Debit COA" />
+                                @if (debitIsValid)
+                                {
+                                    <span class="badge bg-success d-flex align-items-center gap-1 py-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                        Valid
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger d-flex align-items-center gap-1 py-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        Invalid
+                                    </span>
+                                }
+                            </div>
+                            @if (!debitIsValid && !string.IsNullOrWhiteSpace(Model.CurrentItem.DebitValidationError))
+                            {
+                                <p class="text-danger small mt-1 mb-0">@Model.CurrentItem.DebitValidationError</p>
+                            }
+                        </div>
+                        <div class="col-md-6">
+                            <label for="current-credit-coa" class="form-label text-muted">Credit COA</label>
+                            <div class="d-flex align-items-start gap-2">
+                                <input type="text" 
+                                       id="current-credit-coa"
+                                       class="form-control font-mono caei-flex-1 @(!creditIsValid ? "border-danger" : "")" 
+                                       value="@(Model.CurrentItem.CreditChartString ?? "-")" 
+                                       disabled
+                                       aria-label="Current Credit COA" />
+                                @if (creditIsValid)
+                                {
+                                    <span class="badge bg-success d-flex align-items-center gap-1 py-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                        Valid
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger d-flex align-items-center gap-1 py-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        Invalid
+                                    </span>
+                                }
+                            </div>
+                            @if (!creditIsValid && !string.IsNullOrWhiteSpace(Model.CurrentItem.CreditValidationError))
+                            {
+                                <p class="text-danger small mt-1 mb-0">@Model.CurrentItem.CreditValidationError</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @* Section: Corrected COA Form *@
+                @if (isOperator)
+                {
+                    <div class="border-top pt-4" id="corrected-coa">
+                        <h5 class="mb-4">Corrected COA</h5>
+                        
+                        <form method="post" id="correctedCoaForm">
+                            <input type="hidden" name="Integration" value="@integration" />
+                            <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
+                            <input type="hidden" name="CurrentItemIndex" value="@Model.CurrentItemIndex" />
+
+                            <div class="row g-4 mb-4">
+                                @if (debitNeedsCorrection)
+                                {
+                                    <div class="@(debitNeedsCorrection && creditNeedsCorrection ? "col-md-6" : "col-12")">
+                                        <label for="new-debit-coa" class="form-label text-muted">New Debit COA <span class="text-danger" aria-hidden="true">*</span></label>
+                                        <input type="text" 
+                                               id="new-debit-coa"
+                                               class="form-control font-mono @(Model.DebitValidationSuccess == false ? "is-invalid border-danger" : Model.DebitValidationSuccess == true ? "is-valid border-success" : "")"
+                                               name="NewDebitCoa"
+                                               value="@Model.NewDebitCoa"
+                                               placeholder="e.g., 3110-12114-XXXXXX-410000-00-000-..."
+                                               aria-describedby="new-debit-coa-desc" />
+                                        <div id="new-debit-coa-desc">
+                                        @if (Model.DebitValidationMessage != null)
+                                        {
+                                            <p class="@(Model.DebitValidationSuccess == true ? "text-success" : "text-danger") small mt-1 mb-0">
+                                                @Model.DebitValidationMessage
+                                            </p>
+                                        }
+                                        else
+                                        {
+                                            <p class="text-muted small mt-1 mb-0">Enter the complete chartstring format</p>
+                                        }
+                                        </div>
+                                    </div>
+                                }
+                                @if (creditNeedsCorrection)
+                                {
+                                    <div class="@(debitNeedsCorrection && creditNeedsCorrection ? "col-md-6" : "col-12")">
+                                        <label for="new-credit-coa" class="form-label text-muted">New Credit COA <span class="text-danger" aria-hidden="true">*</span></label>
+                                        <input type="text" 
+                                               id="new-credit-coa"
+                                               class="form-control font-mono @(Model.CreditValidationSuccess == false ? "is-invalid border-danger" : Model.CreditValidationSuccess == true ? "is-valid border-success" : "")"
+                                               name="NewCreditCoa"
+                                               value="@Model.NewCreditCoa"
+                                               placeholder="e.g., 3110-12114-XXXXXX-410000-00-000-..."
+                                               aria-describedby="new-credit-coa-desc" />
+                                        <div id="new-credit-coa-desc">
+                                        @if (Model.CreditValidationMessage != null)
+                                        {
+                                            <p class="@(Model.CreditValidationSuccess == true ? "text-success" : "text-danger") small mt-1 mb-0">
+                                                @Model.CreditValidationMessage
+                                            </p>
+                                        }
+                                        else
+                                        {
+                                            <p class="text-muted small mt-1 mb-0">Enter the complete chartstring format</p>
+                                        }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label text-muted">Correction Reason <span class="text-muted">(Optional)</span></label>
+                                <textarea class="form-control" name="CorrectionReason" rows="2" placeholder="Explain why this correction was made...">@Model.CorrectionReason</textarea>
+                            </div>
+
+                            @* Validation Status *@
+                            @if (Model.IsValidated)
+                            {
+                                <div class="p-3 rounded mb-4 caei-box-success">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3DAE2B" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                        <span>COA validated successfully! Click "Save Correction" to apply changes.</span>
+                                    </div>
+                                </div>
+                            }
+                            else if (Model.DebitValidationSuccess == false || Model.CreditValidationSuccess == false)
+                            {
+                                <div class="p-3 rounded mb-4 caei-box-error">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C10230" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                                        <span>Validation failed. Please fix the COA values and try again.</span>
+                                    </div>
+                                </div>
+                            }
+
+                            @* Action Buttons *@
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="submit" asp-page-handler="Validate" class="btn btn-primary">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><polyline points="20 6 9 17 4 12"/></svg>
+                                    Validate COA
+                                </button>
+                                @if (Model.IsValidated)
+                                {
+                                    <button type="submit" asp-page-handler="Submit" class="btn btn-success">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+                                        Save Correction
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-success" disabled>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+                                        Save Correction
+                                    </button>
+                                }
+                                <button type="submit" asp-page-handler="Reset" class="btn btn-outline-secondary">Reset</button>
+                            </div>
+                        </form>
+                    </div>
+                }
+                else
+                {
+                    <div class="border-top pt-4">
+                        <div class="alert alert-info mb-0">
+                            <strong>Note:</strong> Operator permissions required to edit COA values.
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ===== AUDIT TRAIL ===== *@
+        <div class="card caei-box-audit">
+            <div class="card-body">
+                <div class="d-flex align-items-start gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#022851" stroke-width="2" class="mt-1"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-2">Audit Trail</h6>
+                        @if (Model.ItemAuditHistory.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-0 caei-table-xs">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Date</th>
+                                            <th scope="col">User</th>
+                                            <th scope="col">Type</th>
+                                            <th scope="col">Changes</th>
+                                            <th scope="col">Reason</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var audit in Model.ItemAuditHistory)
+                                        {
+                                            <tr>
+                                                <td class="text-nowrap">@audit.CorrectedAt.ToString("MM/dd/yy HH:mm")</td>
+                                                <td>@audit.CorrectedBy</td>
+                                                <td><span class="badge bg-secondary">@audit.CorrectionType</span></td>
+                                                <td class="small">
+                                                    @if (!string.IsNullOrEmpty(audit.OldDebitCoa))
+                                                    {
+                                                        <div title="@audit.OldDebitCoa → @audit.NewDebitCoa"><strong>D:</strong> changed</div>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(audit.OldCreditCoa))
+                                                    {
+                                                        <div title="@audit.OldCreditCoa → @audit.NewCreditCoa"><strong>C:</strong> changed</div>
+                                                    }
+                                                </td>
+                                                <td class="small">@(audit.CorrectionReason ?? "—")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted small mb-0">
+                                All corrections are tracked with: Old COA, New COA, Corrected By, Timestamp, and Reason. 
+                                This ensures full traceability for compliance and finance requirements.
+                            </p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (Model.SelectedBatchId.HasValue)
+    {
+        <div class="card">
+            <div class="card-body text-center py-4">
+                <p class="text-muted mb-0">No invalid items found in the selected batch.</p>
+            </div>
+        </div>
+    }
+}
+
+@section Scripts {
+    <script src="~/js/coa-validations-scroll.js"></script>
+}
+

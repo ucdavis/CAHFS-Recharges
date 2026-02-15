@@ -1,0 +1,480 @@
+@page "/Integrations/{integration}/Staging/FeedReview"
+@using System
+@using System.Linq
+@using CAHFS_Recharges.Services
+@model CAHFS_Recharges.Pages.Integrations.Staging.FeedReviewModel
+@{
+    ViewData["Title"] = "Staging Data";
+    var integration = ViewData["Integration"] as string ?? "CAHFS";
+    
+    // Calculate summary values
+    var totalBatches = Model.Batches?.Count ?? 0;
+    var invalidBatches = Model.Batches?.Count(b => b.AERequestStatus == "Needs Review") ?? 0;
+    var invalidItems = Model.InvalidItemsCount;
+    var readyToSend = Model.Batches?.Count(b => b.AERequestStatus == "Ready") ?? 0;
+    var sentBatches = Model.Batches?.Count(b =>
+        b.AERequestStatus != null && (
+            b.AERequestStatus.Equals("Validated", StringComparison.OrdinalIgnoreCase) ||
+            b.AERequestStatus.Equals("SUCCESS", StringComparison.OrdinalIgnoreCase) ||
+            b.AERequestStatus.Equals("Sent", StringComparison.OrdinalIgnoreCase))) ?? 0;
+    
+    // Get selected batch info
+    var selectedBatch = Model.SelectedBatchId.HasValue 
+        ? Model.Batches?.FirstOrDefault(b => b.BatchID == Model.SelectedBatchId.Value) 
+        : null;
+}
+
+@* ===== PAGE HEADER ===== *@
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h1 class="h3 mb-1">Staging Data</h1>
+        <p class="text-muted mb-0">View and manage batch data and associated items</p>
+    </div>
+    <form method="post" asp-page-handler="ValidatePending">
+        <input type="hidden" name="Integration" value="@integration" />
+        <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
+        <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+        <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+        <input type="hidden" name="Status" value="@Model.Status" />
+        <input type="hidden" name="JournalName" value="@Model.JournalName" />
+        <button type="submit" class="btn btn-primary">Validate Pending COA</button>
+    </form>
+</div>
+
+@* ===== 5-COLUMN SUMMARY GRID WITH QUICK ACTIONS (Compact) ===== *@
+<div class="staging-stats-grid staging-stats-grid-5">
+    <div class="staging-stat-card">
+        <div class="d-flex align-items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <span class="staging-stat-value">@totalBatches</span>
+        </div>
+        <div class="staging-stat-label">Total Batches</div>
+    </div>
+
+    <div class="staging-stat-card @(invalidBatches > 0 ? "has-warning" : "")">
+        <div class="d-flex align-items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="@(invalidBatches > 0 ? "text-warning" : "text-muted")"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span class="staging-stat-value @(invalidBatches > 0 ? "text-warning" : "")">@invalidBatches</span>
+        </div>
+        <div class="staging-stat-label">Invalid Batches</div>
+        <div class="staging-stat-action text-muted small">"Needs Review"</div>
+    </div>
+
+    <a href="/Integrations/@integration/Staging/CoaValidations" class="staging-stat-card staging-stat-clickable @(invalidItems > 0 ? "has-warning" : "")">
+        <div class="d-flex align-items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="@(invalidItems > 0 ? "text-danger" : "text-muted")"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span class="staging-stat-value @(invalidItems > 0 ? "text-danger" : "")">@invalidItems</span>
+        </div>
+        <div class="staging-stat-label">Invalid Items</div>
+        <div class="staging-stat-action">View COA Validations →</div>
+    </a>
+
+    <a href="/Integrations/@integration/Staging/SendToAggieEnterprise" class="staging-stat-card staging-stat-clickable @(readyToSend > 0 ? "has-success" : "")">
+        <div class="d-flex align-items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="@(readyToSend > 0 ? "text-success" : "text-muted")"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <span class="staging-stat-value @(readyToSend > 0 ? "text-success" : "")">@readyToSend</span>
+        </div>
+        <div class="staging-stat-label">Ready to Send</div>
+        <div class="staging-stat-action">Send to AE →</div>
+    </a>
+
+    <a href="/Integrations/@integration/History/SentHistory" class="staging-stat-card staging-stat-clickable">
+        <div class="d-flex align-items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span class="staging-stat-value">@sentBatches</span>
+        </div>
+        <div class="staging-stat-label">Sent Batches</div>
+        <div class="staging-stat-action">View History →</div>
+    </a>
+</div>
+
+@* ===== MESSAGES ===== *@
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @Model.SuccessMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>Error:</strong> @Model.ErrorMessage
+        <a href="/Integrations/@integration/Staging/FeedReview" class="btn btn-sm btn-outline-danger ms-3">Retry</a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.InfoMessage))
+{
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        @Model.InfoMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@* ===== FILTERS CARD ===== *@
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="mb-3">Filters</h5>
+        <form method="get">
+            <input type="hidden" name="integration" value="@integration" />
+            <div class="row g-3 mb-3">
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="FromDate" class="form-label">From Date</label>
+                    <input asp-for="FromDate" class="form-control" type="date" />
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="ToDate" class="form-label">To Date</label>
+                    <input asp-for="ToDate" class="form-control" type="date" />
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="Status" class="form-label">Status</label>
+                    <select asp-for="Status" class="form-select">
+                        <option value="">All Statuses</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Ready">Ready</option>
+                        <option value="Needs Review">Needs Review</option>
+                        <option value="SUCCESS">SUCCESS</option>
+                        <option value="ERROR">ERROR</option>
+                    </select>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="JournalName" class="form-label">Journal Name</label>
+                    <input asp-for="JournalName" class="form-control" placeholder="Search..." />
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="/Integrations/@integration/Staging/FeedReview" class="btn btn-outline-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* ===== EXPORT ACTIONS CARD ===== *@
+@{
+    var statusOptions = new[] { "Pending", "Ready", "Needs Review", "Validated", "Success", "Error" };
+}
+<div class="card mb-3 overflow-visible">
+    <div class="card-body py-3 overflow-visible">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-outline-secondary"
+                   asp-page-handler="DownloadBatches"
+                   asp-route-Integration="@integration"
+                   asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                   asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                   asp-route-Status="@Model.Status"
+                   asp-route-JournalName="@Model.JournalName">
+                    Export Batch
+                </a>
+                <a class="btn btn-outline-secondary"
+                   asp-page-handler="DownloadItems"
+                   asp-route-Integration="@integration"
+                   asp-route-SelectedBatchId="@Model.SelectedBatchId"
+                   asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                   asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                   asp-route-Status="@Model.Status"
+                   asp-route-JournalName="@Model.JournalName">
+                    Export Items
+                </a>
+                <a class="btn btn-outline-secondary"
+                   asp-page-handler="DownloadAll"
+                   asp-route-Integration="@integration"
+                   asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                   asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                   asp-route-Status="@Model.Status"
+                   asp-route-JournalName="@Model.JournalName">
+                    Download All
+                </a>
+            </div>
+            <div class="dropdown position-static status-filter-dropdown-wrapper" data-bs-boundary="viewport">
+                <button class="btn btn-outline-primary dropdown-toggle" type="button" id="statusFilterDropdown" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false">
+                    @(string.IsNullOrWhiteSpace(Model.Status) ? "Filter by Status" : Model.Status)
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end status-filter-dropdown-menu" aria-labelledby="statusFilterDropdown">
+                    <li>
+                        <a class="dropdown-item @(string.IsNullOrWhiteSpace(Model.Status) ? "active" : "")"
+                           href="/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&JournalName=@(Model.JournalName ?? "")">
+                            All Statuses
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider" /></li>
+                    @foreach (var status in statusOptions)
+                    {
+                        <li>
+                            <a class="dropdown-item @(Model.Status == status ? "active" : "")"
+                               href="/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Uri.EscapeDataString(status)&JournalName=@(Model.JournalName ?? "")">
+                                @status
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ===== BATCHES TABLE CARD ===== *@
+<div class="card mb-3">
+    <div class="card-body border-bottom py-3">
+        <h5 class="mb-1">Batches</h5>
+        <p class="text-muted small mb-0">Select a batch to view its items</p>
+    </div>
+    @if (!Model.Batches.Any())
+    {
+        <div class="card-body text-center py-5">
+            <p class="text-muted mb-2">No batches found matching the selected filters.</p>
+            <a href="/Integrations/@integration/Staging/FeedReview" class="btn btn-outline-primary btn-sm">Clear All Filters</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive caei-scroll-y-400">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="sticky-top bg-white">
+                    <tr>
+                        <th scope="col"></th>
+                        <th scope="col">Batch ID</th>
+                        <th scope="col">Txn Date</th>
+                        <th scope="col">Date Sent</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Journal Name</th>
+                        <th scope="col">Journal Ref</th>
+                        <th scope="col">Batch Total</th>
+                        <th scope="col">Error Detail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var b in Model.Batches)
+                    {
+                        var isSelected = Model.SelectedBatchId.HasValue && Model.SelectedBatchId.Value == b.BatchID;
+                        <tr class="@(isSelected ? "table-primary" : "") caei-row-clickable">
+                            <td>
+                                <a class="btn btn-link btn-sm p-0" 
+                                   href="/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@b.BatchID#items">
+                                    View items
+                                </a>
+                            </td>
+                            <td class="font-mono">@b.BatchID</td>
+                            <td>@(b.AETransactionDate?.ToString("yyyy-MM-dd") ?? "")</td>
+                            <td>@(b.DateSent?.ToString("yyyy-MM-dd") ?? "")</td>
+                            <td>@b.AERequestStatus</td>
+                            <td>@b.AEJournalName</td>
+                            <td class="font-mono">@b.AEJournalReference</td>
+                            <td class="text-end">@(b.BatchTotal?.ToString("N2"))</td>
+                            <td class="text-danger small">@b.ErrorDetail</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@* ===== ITEMS TABLE CARD ===== *@
+@if (selectedBatch != null)
+{
+    <div class="card" id="items">
+        <div class="card-body border-bottom py-3 bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-1">Items for @(Model.SelectedBatchJournalName ?? "Batch " + selectedBatch.BatchID)</h5>
+                    <p class="text-muted small mb-0">@Model.Items.Count() items</p>
+                </div>
+                <div class="d-flex gap-2">
+                    @if (!Model.ShowInvalidOnly)
+                    {
+                        <a class="btn btn-outline-warning btn-sm"
+                           href="/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId&ShowInvalidOnly=true#items">
+                            Show Invalid COA
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="badge bg-warning text-dark align-self-center">Showing Invalid Only</span>
+                        <a class="btn btn-outline-secondary btn-sm"
+                           href="/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId#items">
+                            Show All
+                        </a>
+                    }
+                    <a class="btn btn-outline-primary btn-sm"
+                       asp-page-handler="DownloadItems"
+                       asp-route-Integration="@integration"
+                       asp-route-SelectedBatchId="@Model.SelectedBatchId"
+                       asp-route-FromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                       asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                       asp-route-Status="@Model.Status"
+                       asp-route-JournalName="@Model.JournalName"
+                       asp-route-ShowInvalidOnly="@Model.ShowInvalidOnly">
+                        Download Items
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        @* AE Details Panel *@
+        @if (Model.AeDetailData != null || !string.IsNullOrWhiteSpace(Model.AeDetailError))
+        {
+            <div class="alert alert-warning mx-3 mt-3 mb-0">
+                <div><strong>AE Details (Drill-down)</strong></div>
+                <div class="mt-1"><strong>Record:</strong> @Model.DetailRecordId | <strong>Side:</strong> @Model.DetailSide</div>
+                <div><strong>Input COA:</strong> <code class="font-mono">@Model.AeDetailInputCoa</code></div>
+
+                @if (!string.IsNullOrWhiteSpace(Model.AeDetailError))
+                {
+                    <div class="mt-1"><strong>GraphQL Errors:</strong> @Model.AeDetailError</div>
+                }
+
+                @if (Model.AeDetailData != null)
+                {
+                    var d = Model.AeDetailData.GlValidateChartstring;
+                    <div class="mt-1"><strong>AE Valid:</strong> @d.ValidationResponse.Valid</div>
+
+                    @if (d.ValidationResponse.ErrorMessages != null && d.ValidationResponse.ErrorMessages.Any())
+                    {
+                        <div class="mt-2"><strong>Error Messages:</strong></div>
+                        <ul class="mb-0">
+                            @foreach (var e in d.ValidationResponse.ErrorMessages)
+                            {
+                                <li>@e</li>
+                            }
+                        </ul>
+                    }
+
+                    <div class="mt-2"><strong>Complete Chartstring:</strong> <code class="font-mono">@d.CompleteChartstring</code></div>
+
+                    @if (d.Segments != null)
+                    {
+                        <div class="mt-2"><strong>Segments:</strong></div>
+                        <div class="font-mono small">
+                            Entity: @d.Segments.Entity |
+                            Fund: @d.Segments.Fund |
+                            Dept: @d.Segments.Department |
+                            Account: @d.Segments.Account |
+                            Purpose: @d.Segments.Purpose |
+                            Project: @d.Segments.Project |
+                            Program: @d.Segments.Program |
+                            Activity: @d.Segments.Activity
+                        </div>
+                    }
+                }
+
+                <div class="mt-2">
+                    <a class="btn btn-sm btn-secondary"
+                       href="/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId">
+                        Clear AE Details
+                    </a>
+                </div>
+            </div>
+        }
+        
+        @if (!Model.Items.Any())
+        {
+            <div class="card-body text-center py-4">
+                <p class="text-muted mb-0">No items found in this batch.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive caei-scroll-y-500">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="sticky-top bg-white">
+                        <tr>
+                            <th scope="col">Record ID</th>
+                            <th scope="col">Original Doc #</th>
+                            <th scope="col">Debit Chart</th>
+                            <th scope="col">Credit Chart</th>
+                            <th scope="col">Txn Date</th>
+                            <th scope="col">Qty</th>
+                            <th scope="col">Unit Price</th>
+                            <th scope="col">Total Charge</th>
+                            <th scope="col">Client ID</th>
+                            <th scope="col">System ID</th>
+                            <th scope="col">Debit Valid?</th>
+                            <th scope="col">Credit Valid?</th>
+                            <th scope="col">Test Code</th>
+                            <th scope="col">Test Name</th>
+                            <th scope="col">Unprocessed COA (StarLIMS)</th>
+                            <th scope="col">AE Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var i in Model.Items)
+                    {
+                        var debitStatus = (i.DebitStringValid ?? "").Trim();
+                        var creditStatus = (i.CreditStringValid ?? "").Trim();
+                        var debitInvalid = debitStatus.Equals("Invalid", StringComparison.OrdinalIgnoreCase);
+                        var creditInvalid = creditStatus.Equals("Invalid", StringComparison.OrdinalIgnoreCase);
+
+                        <tr>
+                            <td class="font-mono">@i.RecordID</td>
+                            <td>@i.OrignalDocNumber</td>
+                            <td class="font-mono small">@i.DebitChartString</td>
+                            <td class="font-mono small">@i.CreditChartString</td>
+                            <td>@(i.TransactionDate == default ? "" : i.TransactionDate.ToString("yyyy-MM-dd"))</td>
+                            <td>@i.Quantity</td>
+                            <td class="text-end">@(i.UnitPrice?.ToString("N2"))</td>
+                            <td class="text-end">@i.TotalCharge.ToString("N2")</td>
+                            <td>@i.ClientID</td>
+                            <td>@i.SystemID</td>
+                            <td>@debitStatus</td>
+                            <td>@creditStatus</td>
+                            <td>@i.TestCode</td>
+                            <td>@i.TestName</td>
+                            <td class="font-mono small">@i.UnprocessedCOAString</td>
+                            <td class="caei-cell-wrap">
+                                @if (debitInvalid)
+                                {
+                                    <div class="text-danger small">
+                                        <strong>D:</strong>
+                                        @(!string.IsNullOrWhiteSpace(i.DebitValidationError) ? i.DebitValidationError : "Invalid (no error text)")
+                                    </div>
+                                }
+                                @if (creditInvalid)
+                                {
+                                    <div class="text-danger small">
+                                        <strong>C:</strong>
+                                        @(!string.IsNullOrWhiteSpace(i.CreditValidationError) ? i.CreditValidationError : "Invalid (no error text)")
+                                    </div>
+                                }
+                                <div class="mt-1 small">
+                                    @if (debitInvalid && !string.IsNullOrWhiteSpace(i.DebitChartString))
+                                    {
+                                        <a href="/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId&DetailRecordId=@i.RecordID&DetailSide=D">
+                                            Detail Debit
+                                        </a>
+                                    }
+                                    @if (creditInvalid && !string.IsNullOrWhiteSpace(i.CreditChartString))
+                                    {
+                                        if (debitInvalid) { <span> | </span> }
+                                        <a href="/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId&DetailRecordId=@i.RecordID&DetailSide=C">
+                                            Detail Credit
+                                        </a>
+                                    }
+                                </div>
+                                @if (!debitInvalid && !creditInvalid)
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+else if (Model.Batches.Any())
+{
+    <div class="card">
+        <div class="card-body text-center py-4">
+            <p class="text-muted mb-0"><em>Select a batch above to view its items.</em></p>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/feed-review-scroll.js"></script>
+}

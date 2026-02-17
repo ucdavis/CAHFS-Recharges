@@ -354,7 +354,7 @@ try
         // Dashboard (middleware). Auth is enforced by your HangfireAuthorizationFilter + global auth middleware.
         app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
         {
-            AppPath = "/Home", // "Back to site" link target
+            AppPath = pathBase + "/Home", // "Back to site" link target
             Authorization = new Hangfire.Dashboard.IDashboardAuthorizationFilter[]
             {
                 new CAHFS_Recharges.Services.HangfireAuthorizationFilter()

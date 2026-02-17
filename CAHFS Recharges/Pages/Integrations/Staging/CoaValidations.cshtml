@@ -4,6 +4,7 @@
     ViewData["Title"] = "COA Validations";
     var isOperator = ViewData["IsOperator"] as bool? ?? false;
     var integration = ViewData["Integration"] as string ?? "CAHFS";
+    var pathBase = HttpContext.Request.PathBase;
     
     // Trim values to handle trailing spaces from database
     var debitStatus = Model.CurrentItem?.DebitStringValid?.Trim();
@@ -123,7 +124,7 @@ else
                         };
                         <li>
                             <a class="dropdown-item @(isSelected ? "active" : "")" 
-                               href="/Integrations/@integration/Staging/CoaValidations?SelectedBatchId=@batch.BatchID&CurrentItemIndex=0#item-details">
+                               href="@(pathBase)/Integrations/@integration/Staging/CoaValidations?SelectedBatchId=@batch.BatchID&CurrentItemIndex=0#item-details">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span>@displayText</span>
                                     <span class="badge @badgeClass ms-2">@(batch.AERequestStatus ?? "Pending")</span>
@@ -145,7 +146,7 @@ else
                 <div class="d-flex justify-content-between align-items-center">
                     @if (Model.HasPrevious)
                     {
-                        <a href="/Integrations/@integration/Staging/CoaValidations?SelectedBatchId=@Model.SelectedBatchId&CurrentItemIndex=@(Model.CurrentItemIndex - 1)" class="btn btn-outline-secondary">
+                        <a href="@(pathBase)/Integrations/@integration/Staging/CoaValidations?SelectedBatchId=@Model.SelectedBatchId&CurrentItemIndex=@(Model.CurrentItemIndex - 1)" class="btn btn-outline-secondary">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
                             Previous
                         </a>
@@ -163,7 +164,7 @@ else
                     </div>
                     @if (Model.HasNext)
                     {
-                        <a href="/Integrations/@integration/Staging/CoaValidations?SelectedBatchId=@Model.SelectedBatchId&CurrentItemIndex=@(Model.CurrentItemIndex + 1)" class="btn btn-outline-secondary">
+                        <a href="@(pathBase)/Integrations/@integration/Staging/CoaValidations?SelectedBatchId=@Model.SelectedBatchId&CurrentItemIndex=@(Model.CurrentItemIndex + 1)" class="btn btn-outline-secondary">
                             Next
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                         </a>

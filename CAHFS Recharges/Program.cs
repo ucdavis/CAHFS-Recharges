@@ -305,6 +305,15 @@ try
             .AllowUnsafeInline();
     });
 
+    // PathBase: when hosted under a virtual directory (e.g. IIS /caei-test), set in appsettings.{Environment}.json
+    var pathBase = builder.Configuration.GetValue<string>("PathBase");
+    if (!string.IsNullOrWhiteSpace(pathBase))
+    {
+        pathBase = pathBase.TrimEnd('/');
+        if (pathBase.Length > 0)
+            app.UsePathBase(pathBase);
+    }
+
     // Pipeline
     if (!app.Environment.IsDevelopment())
     {

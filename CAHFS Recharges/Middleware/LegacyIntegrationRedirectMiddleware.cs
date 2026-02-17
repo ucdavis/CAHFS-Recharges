@@ -44,7 +44,8 @@ public class LegacyIntegrationRedirectMiddleware
 
         if (targetPath != null)
         {
-            context.Response.Redirect(targetPath + query, permanent: false);
+            var pathBase = context.Request.PathBase.Value ?? "";
+            context.Response.Redirect(pathBase + targetPath + query, permanent: false);
             return;
         }
 

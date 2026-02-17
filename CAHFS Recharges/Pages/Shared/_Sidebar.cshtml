@@ -26,7 +26,7 @@
             }
             @if (useRouteBased)
             {
-                <a class="@stagingClass" href="@stagingPage">
+                <a class="@stagingClass" href="@(Context.Request.PathBase)@stagingPage">
                     <span class="nav-icon" aria-hidden="true">📊</span>
                     Staging Data
                 </a>
@@ -46,7 +46,7 @@
             }
             @if (useRouteBased)
             {
-                <a class="@coaClass" href="@coaValidationPage">
+                <a class="@coaClass" href="@(Context.Request.PathBase)@coaValidationPage">
                     <span class="nav-icon" aria-hidden="true">✓</span>
                     COA Validations
                 </a>
@@ -66,7 +66,7 @@
             }
             @if (useRouteBased)
             {
-                <a class="@historyClass" href="@sentHistoryPage">
+                <a class="@historyClass" href="@(Context.Request.PathBase)@sentHistoryPage">
                     <span class="nav-icon" aria-hidden="true">📋</span>
                     Sent History
                 </a>
@@ -86,7 +86,7 @@
             }
             @if (useRouteBased)
             {
-                <a class="@sendClass" href="@manualSendPage">
+                <a class="@sendClass" href="@(Context.Request.PathBase)@manualSendPage">
                     <span class="nav-icon" aria-hidden="true">📤</span>
                     Send to AE
                 </a>
@@ -120,7 +120,7 @@
         <div class="sidebar-heading">Admin</div>
         <ul class="nav flex-column">
             <li class="nav-item">
-                <a class="nav-link" href="/hangfire" aria-describedby="hangfire-note">
+                <a class="nav-link" href="@(Context.Request.PathBase)/hangfire" aria-describedby="hangfire-note">
                     <span class="nav-icon" aria-hidden="true">⚙️</span>
                     Hangfire Dashboard
                 </a>

@@ -82,7 +82,10 @@ namespace CAHFS_Recharges.Pages
                     await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, user);
 
                     // Redirect to Home for integration selection, unless specific return URL requested
+                    var pathBase = HttpContext.Request.PathBase.Value ?? "";
                     var redirectUrl = !string.IsNullOrWhiteSpace(returnUrl) ? returnUrl : "/Home";
+                    if (redirectUrl.StartsWith("/") && (string.IsNullOrEmpty(pathBase) || !redirectUrl.StartsWith(pathBase, StringComparison.Ordinal)))
+                        redirectUrl = pathBase + redirectUrl;
                     return new LocalRedirectResult(redirectUrl);
                 }
             }

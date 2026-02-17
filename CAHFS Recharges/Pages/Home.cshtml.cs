@@ -33,7 +33,8 @@ namespace CAHFS_Recharges.Pages
             _integrationService.SetIntegrationCookie(HttpContext, integrationType);
 
             // Always redirect to route-based URL: /Integrations/{integration}/Staging/FeedReview
-            var redirectUrl = IntegrationLinkHelper.GetStagingDataPage(integrationType);
+            var pathBase = HttpContext.Request.PathBase.Value ?? "";
+            var redirectUrl = pathBase + IntegrationLinkHelper.GetStagingDataPage(integrationType);
             return Redirect(redirectUrl);
         }
     }

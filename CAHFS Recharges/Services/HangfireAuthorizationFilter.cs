@@ -12,18 +12,19 @@ namespace CAHFS_Recharges.Services
         public bool Authorize(DashboardContext context)
         {
             var httpContext = context.GetHttpContext();
+            var pathBase = httpContext.Request.PathBase.Value ?? "";
 
             var user = httpContext.User;
             if (user?.Identity?.IsAuthenticated != true)
             {
-               httpContext.Response.Redirect("/Login?returnUrl=/hangfire");
+                httpContext.Response.Redirect(pathBase + "/Login?returnUrl=" + Uri.EscapeDataString(pathBase + "/hangfire"));
                 return false;
             }
 
             var authz = httpContext.RequestServices.GetService<IAuthorizationService>();
             if (authz == null)
             {
-                httpContext.Response.Redirect("/Denied?reason=hangfire");
+                httpContext.Response.Redirect(pathBase + "/Denied?reason=hangfire");
                 return false;
             }
 
@@ -31,7 +32,7 @@ namespace CAHFS_Recharges.Services
             
             if (!result.Succeeded)
             {
-                httpContext.Response.Redirect("/Denied?reason=hangfire");
+                httpContext.Response.Redirect(pathBase + "/Denied?reason=hangfire");
                 return false;
             }
 

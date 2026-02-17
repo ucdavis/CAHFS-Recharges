@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "Sent History";
     var integration = ViewData["Integration"] as string ?? "CAHFS";
+    var pathBase = HttpContext.Request.PathBase;
     
     // Calculate stats from SentBatches
     var totalCount = Model.SentBatches.Count;
@@ -10,7 +11,7 @@
     var rejectedCount = Model.SentBatches.Count(b => b.Status == "Error" || b.Status == "Rejected" || b.Status == "Failed");
 }
 
-@* ===== ITEMS PREVIEW (full-screen overlay like Send to AE) ===== *@
+@*  ITEMS PREVIEW (full-screen overlay like Send to AE)  *@
 @if (Model.PreviewBatchId.HasValue)
 {
     var previewBatch = Model.SentBatches.FirstOrDefault(b => b.BatchId == Model.PreviewBatchId.Value);
@@ -330,7 +331,7 @@
                                     _ => "#6b7280"
                                 };
 
-                                var expandHref = "/Integrations/" + integration + "/History/SentHistory?StartDate=" + Model.StartDate?.ToString("yyyy-MM-dd") + "&EndDate=" + Model.EndDate?.ToString("yyyy-MM-dd") + "&StatusFilter=" + (Model.StatusFilter ?? "") + "&JournalFilter=" + (Model.JournalFilter ?? "") + "&ExpandedBatchId=" + (isExpanded ? "" : batch.BatchId.ToString()) + (isExpanded ? "" : "#batch-" + batch.BatchId.ToString());
+                                var expandHref = (pathBase.HasValue ? pathBase.Value.TrimEnd('/') + "/" : "/") + "Integrations/" + integration + "/History/SentHistory?StartDate=" + Model.StartDate?.ToString("yyyy-MM-dd") + "&EndDate=" + Model.EndDate?.ToString("yyyy-MM-dd") + "&StatusFilter=" + (Model.StatusFilter ?? "") + "&JournalFilter=" + (Model.JournalFilter ?? "") + "&ExpandedBatchId=" + (isExpanded ? "" : batch.BatchId.ToString()) + (isExpanded ? "" : "#batch-" + batch.BatchId.ToString());
                                 <tr id="batch-@batch.BatchId" class="caei-row-clickable @(isExpanded ? "caei-table-batch-row-expanded" : "")">
                                     <td style="padding: 0.75rem 1rem; vertical-align: middle;">
                                         <a href="@expandHref" class="btn btn-sm p-1 caei-btn-icon-only" aria-label="@(isExpanded ? "Collapse" : "Expand") batch details">
@@ -435,7 +436,7 @@
                                                     </a>
                                                     @{
                                                         var previewHref =
-                                                            "/Integrations/" + integration + "/History/SentHistory"
+                                                            (pathBase.HasValue ? pathBase.Value.TrimEnd('/') + "/" : "/") + "Integrations/" + integration + "/History/SentHistory"
                                                             + "?StartDate=" + Model.StartDate?.ToString("yyyy-MM-dd")
                                                             + "&EndDate=" + Model.EndDate?.ToString("yyyy-MM-dd")
                                                             + "&StatusFilter=" + (Model.StatusFilter ?? "")

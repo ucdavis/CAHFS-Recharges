@@ -23,6 +23,8 @@ using Quartz;
 using System.Security.Claims;
 using System.Xml.Linq;
 
+// Hi this is test comment
+
 var builder = WebApplication.CreateBuilder(args);
 
 string awsCredentialsFilePath = Directory.GetCurrentDirectory() + "\\awscredentials.xml";

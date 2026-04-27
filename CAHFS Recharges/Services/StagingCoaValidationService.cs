@@ -49,7 +49,7 @@ namespace CAHFS_Recharges.Services
                 maxParallelCalls,
                 ct,
                 () => feedItems
-                    .Where(i => i.DebitStringValid == null || i.CreditStringValid == null)
+                    .Where(i => !i.DoNotInclude && (i.DebitStringValid == null || i.CreditStringValid == null))
                     .OrderBy(i => i.BatchID)
                     .ThenBy(i => i.RecordID)
                     .Take(batchSize)
@@ -74,7 +74,7 @@ namespace CAHFS_Recharges.Services
                 ct.ThrowIfCancellationRequested();
 
                 var items = await _db.FeedItems
-                    .Where(i => i.DebitStringValid == null || i.CreditStringValid == null)
+                    .Where(i => !i.DoNotInclude && (i.DebitStringValid == null || i.CreditStringValid == null))
                     .OrderBy(i => i.BatchID)
                     .ThenBy(i => i.RecordID)
                     .Take(batchSize)
@@ -295,11 +295,14 @@ namespace CAHFS_Recharges.Services
             var feedItems = _dbResolver.GetFeedItems(integration);
             foreach (var batchId in batchIds)
             {
-                var hasInvalid = await feedItems.AnyAsync(i =>
+                var hasCoaIssue = await feedItems.AnyAsync(i =>
                     i.BatchID == batchId &&
-                    (i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid"), ct);
+                    !i.DoNotInclude &&
+                    i.DebitStringValid != null &&
+                    i.CreditStringValid != null &&
+                    (i.DebitStringValid != "Valid" || i.CreditStringValid != "Valid"), ct);
 
-                if (hasInvalid)
+                if (hasCoaIssue)
                 {
                     await _dbResolver.ExecuteSqlAsync(integration,
                         $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {"Needs Review"} WHERE batchID = {batchId}", ct);
@@ -308,6 +311,7 @@ namespace CAHFS_Recharges.Services
 
                 var hasPending = await feedItems.AnyAsync(i =>
                     i.BatchID == batchId &&
+                    !i.DoNotInclude &&
                     (i.DebitStringValid == null || i.CreditStringValid == null), ct);
 
                 if (!hasPending)
@@ -325,11 +329,14 @@ namespace CAHFS_Recharges.Services
 
             foreach (var batchId in batchIds)
             {
-                var hasInvalid = await _db.FeedItems.AnyAsync(i =>
+                var hasCoaIssue = await _db.FeedItems.AnyAsync(i =>
                     i.BatchID == batchId &&
-                    (i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid"), ct);
+                    !i.DoNotInclude &&
+                    i.DebitStringValid != null &&
+                    i.CreditStringValid != null &&
+                    (i.DebitStringValid != "Valid" || i.CreditStringValid != "Valid"), ct);
 
-                if (hasInvalid)
+                if (hasCoaIssue)
                 {
                     await _db.Database.ExecuteSqlInterpolatedAsync(
                         $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {"Needs Review"} WHERE batchID = {batchId}", ct);
@@ -338,6 +345,7 @@ namespace CAHFS_Recharges.Services
 
                 var hasPending = await _db.FeedItems.AnyAsync(i =>
                     i.BatchID == batchId &&
+                    !i.DoNotInclude &&
                     (i.DebitStringValid == null || i.CreditStringValid == null), ct);
 
                 if (!hasPending)

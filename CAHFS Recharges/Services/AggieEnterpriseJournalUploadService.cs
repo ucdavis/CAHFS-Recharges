@@ -61,7 +61,7 @@ namespace CAHFS_Recharges.Services
 
             var items = await feedItems
                 .AsNoTracking()
-                .Where(i => i.BatchID == batchId)
+                .Where(i => i.BatchID == batchId && !i.DoNotInclude)
                 .ToListAsync(ct);
 
             var itemCount = items.Count;
@@ -93,7 +93,7 @@ namespace CAHFS_Recharges.Services
 
             var items = await feedItems
                 .AsNoTracking()
-                .Where(i => i.BatchID == batchId)
+                .Where(i => i.BatchID == batchId && !i.DoNotInclude)
                 .OrderBy(i => i.TransactionDate)
                 .ThenBy(i => i.RecordID)
                 .ToListAsync(ct);
@@ -144,7 +144,7 @@ namespace CAHFS_Recharges.Services
                 return new SendResult(false, "Batch not found.", null);
 
             var items = await feedItems
-                .Where(i => i.BatchID == batchId)
+                .Where(i => i.BatchID == batchId && !i.DoNotInclude)
                 .OrderBy(i => i.TransactionDate)
                 .ThenBy(i => i.RecordID)
                 .ToListAsync(ct);

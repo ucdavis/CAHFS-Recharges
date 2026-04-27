@@ -66,6 +66,8 @@ namespace CAHFS_Recharges.Models
         [Column("CreditValidationError")]
         public string? CreditValidationError { get; set; }
 
-
+        /// <summary>When true, item is soft-excluded from validation counts, batch status, and AE payload.</summary>
+        [Column("DoNotInclude")]
+        public bool DoNotInclude { get; set; }
     }
 }

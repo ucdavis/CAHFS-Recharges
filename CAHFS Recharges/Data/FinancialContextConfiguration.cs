@@ -52,6 +52,7 @@ namespace CAHFS_Recharges.Data
                 entity.Property(e => e.TestCode).HasColumnName("TestCode").HasMaxLength(50);
                 entity.Property(e => e.TestName).HasColumnName("TestName").HasMaxLength(200);
                 entity.Property(e => e.UnprocessedCOAString).HasColumnName("UnprocessedCOAString").HasMaxLength(500);
+                entity.Property(e => e.DoNotInclude).HasColumnName("DoNotInclude").IsRequired();
             });
         }
     }

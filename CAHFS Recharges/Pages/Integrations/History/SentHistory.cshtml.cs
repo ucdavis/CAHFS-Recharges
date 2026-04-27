@@ -166,6 +166,7 @@ namespace CAHFS_Recharges.Pages.Integrations.History
             {
                 // Query all items and filter in memory to avoid SQL Contains() issues
                 var allItemBatchIds = await feedItems
+                    .Where(i => !i.DoNotInclude)
                     .Select(i => i.BatchID)
                     .ToListAsync();
 
@@ -202,6 +203,7 @@ namespace CAHFS_Recharges.Pages.Integrations.History
                     // Get items with errors for this batch (fetch data first, then map in memory)
                     var errorItemsRaw = await feedItems
                         .Where(i => i.BatchID == ExpandedBatchId.Value &&
+                                    !i.DoNotInclude &&
                                     (i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid"))
                         .Select(i => new
                         {
@@ -242,7 +244,7 @@ namespace CAHFS_Recharges.Pages.Integrations.History
             // Load full items preview if requested
             if (PreviewBatchId.HasValue)
             {
-                var previewQuery = feedItems.Where(i => i.BatchID == PreviewBatchId.Value);
+                var previewQuery = feedItems.Where(i => i.BatchID == PreviewBatchId.Value && !i.DoNotInclude);
 
                 if (!string.IsNullOrWhiteSpace(PreviewSearch))
                 {
@@ -373,13 +375,13 @@ Error: {batch.ErrorDetail ?? "(none)"}
         }
 
         /// <summary>
-        /// Downloads the items for the selected batch (sent to AE) as Excel.
+        /// Downloads items that were included in the AE journal (same set as send payload), as Excel.
         /// </summary>
         public async Task<IActionResult> OnGetDownloadPayloadAsync(Guid batchId)
         {
             var feedItems = _dbResolver.GetFeedItems(ResolvedIntegration);
             var items = await feedItems
-                .Where(i => i.BatchID == batchId)
+                .Where(i => i.BatchID == batchId && !i.DoNotInclude)
                 .OrderBy(i => i.TransactionDate)
                 .ThenBy(i => i.RecordID)
                 .AsNoTracking()

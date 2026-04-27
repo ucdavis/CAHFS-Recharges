@@ -17,6 +17,7 @@
     // For correction form - show input if NOT valid (Invalid, null, or any other value)
     var debitNeedsCorrection = debitStatus != "Valid";
     var creditNeedsCorrection = creditStatus != "Valid";
+    var itemExcluded = Model.CurrentItem?.DoNotInclude == true;
 }
 
 @* ===== PAGE HEADER ===== *@
@@ -119,7 +120,8 @@ else
                         var badgeClass = batch.AERequestStatus switch
                         {
                             "Needs Review" => "bg-warning text-dark",
-                            "ERROR" => "bg-danger",
+                            "ERROR" or "Error" => "bg-danger",
+                            "Ready" => "bg-success",
                             _ => "bg-secondary"
                         };
                         <li>
@@ -181,7 +183,7 @@ else
         </div>
 
         @* ===== CURRENT ITEM DETAILS ===== *@
-        <div class="card mb-3">
+        <div class="card mb-3" id="item-details">
             <div class="card-body">
                 @* Section: Item Information *@
                 <h5 class="mb-3">Current Item Information</h5>
@@ -218,6 +220,40 @@ else
                         <div>$@Model.CurrentItem.TotalCharge.ToString("N2")</div>
                     </div>
                 </div>
+
+                @if (itemExcluded)
+                {
+                    <div class="alert alert-warning d-flex align-items-start gap-2 mb-4" role="status">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        <div>
+                            <strong>Excluded from batch.</strong>
+                            <span class="d-block small mb-0">This line is not counted in validation, not sent to Aggie Enterprise, and is kept for troubleshooting.</span>
+                        </div>
+                    </div>
+                }
+
+                @if (isOperator)
+                {
+                    <div class="d-flex flex-wrap gap-2 mb-4">
+                        @if (itemExcluded)
+                        {
+                            <form method="post" asp-page-handler="ToggleInclude" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="Integration" value="@integration" />
+                                <input type="hidden" name="recordId" value="@Model.CurrentItem.RecordID" />
+                                <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
+                                <input type="hidden" name="CurrentItemIndex" value="@Model.CurrentItemIndex" />
+                                <button type="submit" class="btn btn-primary">Include in batch</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#confirmExcludeModal" aria-haspopup="dialog">
+                                Exclude from batch
+                            </button>
+                        }
+                    </div>
+                }
 
                 @* Section: Current COA *@
                 <div class="border-top pt-4 mb-4">
@@ -285,12 +321,13 @@ else
                 </div>
 
                 @* Section: Corrected COA Form *@
-                @if (isOperator)
+                @if (isOperator && !itemExcluded)
                 {
                     <div class="border-top pt-4" id="corrected-coa">
                         <h5 class="mb-4">Corrected COA</h5>
                         
                         <form method="post" id="correctedCoaForm">
+                            @Html.AntiForgeryToken()
                             <input type="hidden" name="Integration" value="@integration" />
                             <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
                             <input type="hidden" name="CurrentItemIndex" value="@Model.CurrentItemIndex" />
@@ -398,11 +435,19 @@ else
                         </form>
                     </div>
                 }
-                else
+                else if (!isOperator)
                 {
                     <div class="border-top pt-4">
                         <div class="alert alert-info mb-0">
                             <strong>Note:</strong> Operator permissions required to edit COA values.
+                        </div>
+                    </div>
+                }
+                else if (itemExcluded)
+                {
+                    <div class="border-top pt-4">
+                        <div class="alert alert-info mb-0">
+                            <strong>Note:</strong> Include this line in the batch before entering corrected COA values.
                         </div>
                     </div>
                 }
@@ -470,6 +515,35 @@ else
         <div class="card">
             <div class="card-body text-center py-4">
                 <p class="text-muted mb-0">No invalid items found in the selected batch.</p>
+            </div>
+        </div>
+    }
+
+    @* Confirm exclude modal *@
+    @if (Model.CurrentItem != null && isOperator && !itemExcluded)
+    {
+        <div class="modal fade" id="confirmExcludeModal" tabindex="-1" aria-labelledby="confirmExcludeModalLabel" aria-modal="true" role="dialog">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="confirmExcludeModalLabel">Exclude line from batch?</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-0">This line will not be sent to Aggie Enterprise and will be ignored for batch validation. You can include it again using Include in batch on this page.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <form method="post" asp-page-handler="ToggleInclude" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="Integration" value="@integration" />
+                            <input type="hidden" name="recordId" value="@Model.CurrentItem.RecordID" />
+                            <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
+                            <input type="hidden" name="CurrentItemIndex" value="@Model.CurrentItemIndex" />
+                            <button type="submit" class="btn btn-danger">Exclude from batch</button>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
     }

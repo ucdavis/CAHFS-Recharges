@@ -173,6 +173,9 @@ try
     builder.Services.AddDbContext<EquineFinancialContext>(options =>
         options.UseSqlServer(builder.Configuration.GetConnectionString("EquineFinancialDb")));
 
+    // StarLIMS write-back
+    builder.Services.AddScoped<StarLimsCoaWritebackService>();
+
     // Data Protection
     builder.Services.AddDataProtection();
 

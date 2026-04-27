@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CAHFS.GraphQl;
 using CAHFS_Recharges.Models;
@@ -15,16 +16,19 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
     {
         private readonly IIntegrationDbResolver _dbResolver;
         private readonly IAggieEnterpriseClient _ae;
+        private readonly StarLimsCoaWritebackService _starLimsWriteback;
 
         public CoaValidationsModel(
             IIntegrationDbResolver dbResolver,
             IAggieEnterpriseClient ae,
+            StarLimsCoaWritebackService starLimsWriteback,
             IIntegrationContextService integrationService,
             IAuthorizationService authorizationService)
             : base(integrationService, authorizationService)
         {
             _dbResolver = dbResolver;
             _ae = ae;
+            _starLimsWriteback = starLimsWriteback;
         }
 
         private IntegrationType ResolvedIntegration => CurrentIntegration ?? IntegrationType.CAHFS;
@@ -83,6 +87,9 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
 
         #endregion
 
+        private object RouteQuery =>
+            new { Integration, SelectedBatchId, CurrentItemIndex };
+
         public async Task OnGetAsync()
         {
             await LoadPageDataAsync();
@@ -93,7 +100,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             if (!await IsOperatorAsync())
             {
                 SetErrorMessage("You do not have permission to perform this action.");
-                return RedirectToPage(new { Integration, SelectedBatchId, CurrentItemIndex });
+                return RedirectToPage(RouteQuery);
             }
 
             await LoadPageDataAsync();
@@ -101,6 +108,12 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             if (CurrentItem == null)
             {
                 SetErrorMessage("No item selected for validation.");
+                return Page();
+            }
+
+            if (CurrentItem.DoNotInclude)
+            {
+                SetErrorMessage("This line is excluded from the batch. Include it before validating or correcting COA.");
                 return Page();
             }
 
@@ -133,7 +146,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             if (!await IsOperatorAsync())
             {
                 SetErrorMessage("You do not have permission to perform this action.");
-                return RedirectToPage(new { Integration, SelectedBatchId, CurrentItemIndex });
+                return RedirectToPage(RouteQuery);
             }
 
             await LoadPageDataAsync();
@@ -141,7 +154,13 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             if (CurrentItem == null)
             {
                 SetErrorMessage("No item selected for correction.");
-                return RedirectToPage(new { Integration, SelectedBatchId, CurrentItemIndex });
+                return RedirectToPage(RouteQuery);
+            }
+
+            if (CurrentItem.DoNotInclude)
+            {
+                SetErrorMessage("This line is excluded from the batch. Include it before saving a COA correction.");
+                return Page();
             }
 
             // Re-validate before saving
@@ -182,7 +201,13 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             if (item == null)
             {
                 SetErrorMessage("Record not found.");
-                return RedirectToPage(new { Integration, SelectedBatchId, CurrentItemIndex });
+                return RedirectToPage(RouteQuery);
+            }
+
+            if (item.DoNotInclude)
+            {
+                SetErrorMessage("This line is excluded from the batch. Include it before saving a COA correction.");
+                return Page();
             }
 
             var username = User.Identity?.Name ?? "Unknown";
@@ -201,7 +226,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             {
                 oldDebit = item.DebitChartString;
                 newDebit = NewDebitCoa.Trim();
-                
+
                 item.DebitChartString = newDebit;
                 item.DebitStringValid = "Valid";
                 item.DebitValidationError = null;
@@ -213,7 +238,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             {
                 oldCredit = item.CreditChartString;
                 newCredit = NewCreditCoa.Trim();
-                
+
                 item.CreditChartString = newCredit;
                 item.CreditStringValid = "Valid";
                 item.CreditValidationError = null;
@@ -242,10 +267,26 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 _dbResolver.GetCoaCorrectionAudits(ResolvedIntegration).Add(audit);
                 await _dbResolver.SaveChangesAsync(ResolvedIntegration);
 
-                // Update batch status if all items are now valid
+                // Update batch status if all included items are now valid
                 await UpdateBatchStatusAsync(item.BatchID);
 
                 SetSuccessMessage($"COA corrected successfully for item.");
+
+                if (ResolvedIntegration == IntegrationType.CAHFS)
+                {
+                    var chosenNewCoa = debitChanged ? newDebit : newCredit;
+                    var chosenOldRaw = debitChanged ? oldDebit : oldCredit;
+                    chosenOldRaw ??= item.UnprocessedCOAString;
+
+                    var (ok, msg) = await _starLimsWriteback.TryWritebackAsync(
+                        docNumber: item.OrignalDocNumber,
+                        newCoa: chosenNewCoa,
+                        oldRawChargeNo: chosenOldRaw,
+                        ct: HttpContext?.RequestAborted ?? CancellationToken.None);
+
+                    if (!ok)
+                        SetInfoMessage(msg);
+                }
 
                 // Move to next item if available, otherwise stay
                 if (HasNext)
@@ -263,8 +304,34 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
 
         public IActionResult OnPostReset()
         {
-            // Just redirect back to clear form
             return RedirectToPage(new { Integration, SelectedBatchId, CurrentItemIndex });
+        }
+
+        public async Task<IActionResult> OnPostToggleIncludeAsync(Guid recordId)
+        {
+            if (!await IsOperatorAsync())
+            {
+                SetErrorMessage("You do not have permission to perform this action.");
+                return RedirectToPage(RouteQuery);
+            }
+
+            var feedItems = _dbResolver.GetFeedItems(ResolvedIntegration);
+            var item = await feedItems.FirstOrDefaultAsync(i => i.RecordID == recordId);
+            if (item == null)
+            {
+                SetErrorMessage("Record not found.");
+                return RedirectToPage(RouteQuery);
+            }
+
+            item.DoNotInclude = !item.DoNotInclude;
+            await _dbResolver.SaveChangesAsync(ResolvedIntegration);
+            await UpdateBatchStatusAsync(item.BatchID);
+
+            SetSuccessMessage(item.DoNotInclude
+                ? "Item excluded from this batch (not sent to AE, not counted in validation)."
+                : "Item included in this batch again.");
+
+            return RedirectToPage(new { Integration, SelectedBatchId = item.BatchID, CurrentItemIndex });
         }
 
         private async Task LoadPageDataAsync()
@@ -273,14 +340,16 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             var feedBatches = _dbResolver.GetFeedBatches(ResolvedIntegration);
             var coaAudits = _dbResolver.GetCoaCorrectionAudits(ResolvedIntegration);
 
-            // Summary: Invalid item count
+            // Summary: issue item count (included rows only; COA not fully Valid)
             InvalidItemCount = await feedItems
-                .Where(i => i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid")
+                .Where(i => !i.DoNotInclude &&
+                    ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid"))
                 .CountAsync();
 
-            // Summary: Get distinct batch IDs with invalid items
+            // Summary: distinct batches with issue items (included only)
             var invalidBatchIds = await feedItems
-                .Where(i => i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid")
+                .Where(i => !i.DoNotInclude &&
+                    ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid"))
                 .Select(i => i.BatchID)
                 .Distinct()
                 .ToListAsync();
@@ -298,15 +367,13 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             }
             catch
             {
-                // Table may not exist yet - graceful fallback
                 CorrectedTodayCount = 0;
             }
 
-            // Load batches with invalid items - show "Needs Review", "ERROR", or null status
             if (invalidBatchIds.Any())
             {
                 var invalidBatchIdSet = new HashSet<Guid>(invalidBatchIds);
-                
+
                 var candidateBatches = await feedBatches
                     .Where(b => b.AERequestStatus == "Needs Review" || b.AERequestStatus == "Error" || b.AERequestStatus == null)
                     .OrderByDescending(b => b.AETransactionDate ?? b.DateSent)
@@ -327,12 +394,15 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 SelectedBatchId = InvalidBatches.First().BatchID;
             }
 
-            // Load invalid items for selected batch
+            // Load items for selected batch
             if (SelectedBatchId.HasValue)
             {
-                InvalidItemsInBatch = await feedItems
-                    .Where(i => i.BatchID == SelectedBatchId.Value &&
-                                (i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid"))
+                // Lines with COA issues (included) plus excluded lines (so operators can re-include)
+                var q = feedItems.Where(i => i.BatchID == SelectedBatchId.Value &&
+                    (i.DoNotInclude ||
+                     ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid")));
+
+                InvalidItemsInBatch = await q
                     .OrderBy(i => i.TransactionDate)
                     .ThenBy(i => i.RecordID)
                     .AsNoTracking()
@@ -347,7 +417,6 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 {
                     CurrentItem = InvalidItemsInBatch[CurrentItemIndex];
 
-                    // Load audit history for current item
                     try
                     {
                         ItemAuditHistory = await coaAudits
@@ -359,7 +428,6 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                     }
                     catch
                     {
-                        // Table may not exist yet - graceful fallback
                         ItemAuditHistory = new List<CoaCorrectionAudit>();
                     }
                 }
@@ -406,19 +474,22 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
 
             var hasInvalid = await feedItems.AnyAsync(i =>
                 i.BatchID == batchId &&
-                (i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid"));
+                !i.DoNotInclude &&
+                ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid"));
 
             if (hasInvalid)
                 return;
 
             var hasPending = await feedItems.AnyAsync(i =>
                 i.BatchID == batchId &&
+                !i.DoNotInclude &&
                 (i.DebitStringValid == null || i.CreditStringValid == null));
 
             if (!hasPending)
             {
+                var status = "Ready";
                 await _dbResolver.ExecuteSqlAsync(ResolvedIntegration,
-                    $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {"Ready"} WHERE batchID = {batchId}");
+                    $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {status} WHERE batchID = {batchId}");
             }
         }
     }

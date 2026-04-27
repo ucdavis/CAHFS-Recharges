@@ -46,9 +46,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
         public string? AeDetailError { get; set; }
         public string? AeDetailInputCoa { get; set; }
 
-        // =======================
         // Filters - querystring
-        // =======================
         [BindProperty(SupportsGet = true)]
         public DateTime? FromDate { get; set; }
 
@@ -73,12 +71,10 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
 
         public IList<FeedBatch> Batches { get; set; } = new List<FeedBatch>();
         public IList<FeedItem> Items { get; set; } = new List<FeedItem>();
-        /// <summary>Count of items with Invalid debit or credit COA across filtered batches (for summary card).</summary>
+        // Count of items where debit or credit COA is not exactly Valid (null/empty/other), across filtered batches.</summary>
         public int InvalidItemsCount { get; set; }
 
-        // ============================================================
         // POST: Validate pending COA
-        // ============================================================
         public async Task<IActionResult> OnPostValidatePendingAsync()
         {
             var updated = await _coaValidator.ValidatePendingItemsAsync(ResolvedIntegration);
@@ -95,9 +91,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             });
         }
 
-        // ============================================================
         // GET: Download Items Excel
-        // ============================================================
         public async Task<IActionResult> OnGetDownloadItemsAsync()
         {
             if (!SelectedBatchId.HasValue)
@@ -108,7 +102,8 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
 
             if (ShowInvalidOnly)
             {
-                q = q.Where(i => i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid");
+                q = q.Where(i =>
+                    (i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid");
             }
 
             var items = await q
@@ -179,9 +174,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 fileName);
         }
 
-        // ============================================================
         // GET: Download Batches Excel
-        // ============================================================
         public async Task<IActionResult> OnGetDownloadBatchesAsync()
         {
             var feedBatches = _dbResolver.GetFeedBatches(ResolvedIntegration);
@@ -271,9 +264,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 fileName);
         }
 
-        // ============================================================
         // GET: Download All = ZIP with Batches.xlsx + Items.xlsx (same filters)
-        // ============================================================
         public async Task<IActionResult> OnGetDownloadAllAsync()
         {
             var feedBatches = _dbResolver.GetFeedBatches(ResolvedIntegration);
@@ -396,9 +387,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             return File(zipStream.ToArray(), "application/zip", zipFileName);
         }
 
-        // ============================================================
         // GET: Load batches + items + AE details (if requested)
-        // ============================================================
         public async Task OnGetAsync()
         {
             // clear AE detail state every load
@@ -452,7 +441,8 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 if (!string.IsNullOrWhiteSpace(JournalName)) batchIdsQuery = batchIdsQuery.Where(b => b.AEJournalName.Contains(JournalName.Trim()));
                 var bIds = batchIdsQuery.OrderByDescending(b => b.AETransactionDate ?? b.DateSent).ThenByDescending(b => b.BatchID).Take(200).Select(b => b.BatchID);
                 InvalidItemsCount = await feedItems
-                    .Where(i => bIds.Contains(i.BatchID) && (i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid"))
+                    .Where(i => bIds.Contains(i.BatchID) &&
+                        ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid"))
                     .CountAsync();
             }
             else
@@ -474,7 +464,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 if (ShowInvalidOnly)
                 {
                     itemsQuery = itemsQuery.Where(i =>
-                        i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid");
+                        (i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid");
                 }
 
                 Items = await itemsQuery

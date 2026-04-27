@@ -95,7 +95,7 @@ namespace CAHFS_Recharges.Services
             // One query -> all counts
             var agg = await feedItems
                 .AsNoTracking()
-                .Where(i => i.BatchID == batchId)
+                .Where(i => i.BatchID == batchId && !i.DoNotInclude)
                 .GroupBy(_ => 1)
                 .Select(g => new
                 {

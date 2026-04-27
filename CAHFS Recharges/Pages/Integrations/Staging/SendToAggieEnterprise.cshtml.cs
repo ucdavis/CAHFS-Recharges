@@ -247,10 +247,11 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                      b.AERequestStatus.Trim() == "Completed" ||
                      b.AERequestStatus.Trim() == "Success"));
 
-            // Count batches that have at least one invalid item (for COA Validations card)
+            // Count batches that have at least one COA issue on included lines (matches COA Validations summary)
             InvalidBatchCount = await feedItems
                 .AsNoTracking()
-                .Where(i => i.DebitStringValid == "Invalid" || i.CreditStringValid == "Invalid")
+                .Where(i => !i.DoNotInclude &&
+                    ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid"))
                 .Select(i => i.BatchID)
                 .Distinct()
                 .CountAsync();

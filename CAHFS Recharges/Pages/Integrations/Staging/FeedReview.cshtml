@@ -288,12 +288,12 @@
                     {
                         <a class="btn btn-outline-warning btn-sm"
                            href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId&ShowInvalidOnly=true#items">
-                            Show Invalid COA
+                            Show COA issues only
                         </a>
                     }
                     else
                     {
-                        <span class="badge bg-warning text-dark align-self-center">Showing Invalid Only</span>
+                        <span class="badge bg-warning text-dark align-self-center">Showing COA issues only</span>
                         <a class="btn btn-outline-secondary btn-sm"
                            href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId#items">
                             Show All
@@ -363,7 +363,7 @@
 
                 <div class="mt-2">
                     <a class="btn btn-sm btn-secondary"
-                       href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId">
+                       href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId@(Model.ShowInvalidOnly ? "&ShowInvalidOnly=true" : "")#items">
                         Clear AE Details
                     </a>
                 </div>
@@ -373,7 +373,7 @@
         @if (!Model.Items.Any())
         {
             <div class="card-body text-center py-4">
-                <p class="text-muted mb-0">No items found in this batch.</p>
+                <p class="text-muted mb-0">@(Model.ShowInvalidOnly ? "No lines with COA issues in this batch (both sides are Valid)." : "No items found in this batch.")</p>
             </div>
         }
         else
@@ -405,8 +405,8 @@
                     {
                         var debitStatus = (i.DebitStringValid ?? "").Trim();
                         var creditStatus = (i.CreditStringValid ?? "").Trim();
-                        var debitInvalid = debitStatus.Equals("Invalid", StringComparison.OrdinalIgnoreCase);
-                        var creditInvalid = creditStatus.Equals("Invalid", StringComparison.OrdinalIgnoreCase);
+                        var debitInvalid = debitStatus != "Valid";
+                        var creditInvalid = creditStatus != "Valid";
 
                         <tr>
                             <td class="font-mono">@i.RecordID</td>
@@ -429,27 +429,27 @@
                                 {
                                     <div class="text-danger small">
                                         <strong>D:</strong>
-                                        @(!string.IsNullOrWhiteSpace(i.DebitValidationError) ? i.DebitValidationError : "Invalid (no error text)")
+                                        @(!string.IsNullOrWhiteSpace(i.DebitValidationError) ? i.DebitValidationError : "Not Valid (no error text)")
                                     </div>
                                 }
                                 @if (creditInvalid)
                                 {
                                     <div class="text-danger small">
                                         <strong>C:</strong>
-                                        @(!string.IsNullOrWhiteSpace(i.CreditValidationError) ? i.CreditValidationError : "Invalid (no error text)")
+                                        @(!string.IsNullOrWhiteSpace(i.CreditValidationError) ? i.CreditValidationError : "Not Valid (no error text)")
                                     </div>
                                 }
                                 <div class="mt-1 small">
                                     @if (debitInvalid && !string.IsNullOrWhiteSpace(i.DebitChartString))
                                     {
-                                        <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId&DetailRecordId=@i.RecordID&DetailSide=D">
+                                        <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId@(Model.ShowInvalidOnly ? "&ShowInvalidOnly=true" : "")&DetailRecordId=@i.RecordID&DetailSide=D#items">
                                             Detail Debit
                                         </a>
                                     }
                                     @if (creditInvalid && !string.IsNullOrWhiteSpace(i.CreditChartString))
                                     {
                                         if (debitInvalid) { <span> | </span> }
-                                        <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId&DetailRecordId=@i.RecordID&DetailSide=C">
+                                        <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId@(Model.ShowInvalidOnly ? "&ShowInvalidOnly=true" : "")&DetailRecordId=@i.RecordID&DetailSide=C#items">
                                             Detail Credit
                                         </a>
                                     }

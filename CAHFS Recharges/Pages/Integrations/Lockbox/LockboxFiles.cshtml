@@ -1,0 +1,169 @@
+@page "/Integrations/{integration}/Lockbox/LockboxFiles"
+@model CAHFS_Recharges.Pages.Integrations.Lockbox.LockboxFilesModel
+@{
+    ViewData["Title"] = "Lockbox Staging Data";
+    var integration = ViewData["Integration"] as string ?? "CAHFS";
+    var poBox = integration.Equals("EQUINE", StringComparison.OrdinalIgnoreCase) ? "744835" : "744833";
+    var pathBase = HttpContext.Request.PathBase;
+    var summary = Model.Summary;
+}
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h1 class="h3 mb-1">Lockbox Staging Data</h1>
+        <p class="text-muted mb-0">Payment staging from BofA lockbox files — PO Box @poBox (@integration)</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @Model.SuccessMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>Error:</strong> @Model.ErrorMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="staging-stats-grid staging-stats-grid-5 mb-4">
+    <div class="staging-stat-card">
+        <span class="staging-stat-value">@summary.TotalCount</span>
+        <div class="staging-stat-label">Total rows</div>
+    </div>
+    <div class="staging-stat-card @(summary.ValidCount > 0 ? "has-success" : "")">
+        <span class="staging-stat-value @(summary.ValidCount > 0 ? "text-success" : "")">@summary.ValidCount</span>
+        <div class="staging-stat-label">Valid</div>
+        <div class="staging-stat-action text-muted small">VALID</div>
+    </div>
+    <div class="staging-stat-card @(summary.WarnCount > 0 ? "has-warning" : "")">
+        <span class="staging-stat-value @(summary.WarnCount > 0 ? "text-warning" : "")">@summary.WarnCount</span>
+        <div class="staging-stat-label">Warnings</div>
+        <div class="staging-stat-action text-muted small">WARN</div>
+    </div>
+    <div class="staging-stat-card @(summary.ErrorCount > 0 ? "has-warning" : "")">
+        <span class="staging-stat-value @(summary.ErrorCount > 0 ? "text-danger" : "")">@summary.ErrorCount</span>
+        <div class="staging-stat-label">Errors</div>
+        <div class="staging-stat-action text-muted small">ERROR</div>
+    </div>
+    <div class="staging-stat-card">
+        <span class="staging-stat-value">@summary.TotalCheckAmount.ToString("C0")</span>
+        <div class="staging-stat-label">Check total</div>
+        <div class="staging-stat-action text-muted small">Primary addenda only</div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Filters</h2>
+        <form method="get">
+            <input type="hidden" name="integration" value="@integration" />
+            <div class="row g-3 mb-3">
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="FromDate" class="form-label">From deposit date <span class="text-muted fw-normal">(optional)</span></label>
+                    <input asp-for="FromDate" class="form-control" type="date" />
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="ToDate" class="form-label">To deposit date <span class="text-muted fw-normal">(optional)</span></label>
+                    <input asp-for="ToDate" class="form-control" type="date" />
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="Status" class="form-label">Validation status</label>
+                    <select asp-for="Status" class="form-select">
+                        <option value="">All statuses</option>
+                        <option value="VALID">VALID</option>
+                        <option value="WARN">WARN</option>
+                        <option value="ERROR">ERROR</option>
+                        <option value="PENDING">PENDING</option>
+                    </select>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="FileName" class="form-label">File name</label>
+                    <input asp-for="FileName" class="form-control" placeholder="DATA_744833..." />
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Apply filters</button>
+                <a href="@(pathBase)/Integrations/@integration/Lockbox/LockboxFiles" class="btn btn-outline-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body border-bottom py-3">
+        <h2 class="h5 mb-1">Staging payments</h2>
+        <p class="text-muted small mb-0">
+            Showing @Model.StagingRows.Count row(s) (max 1,000) for lockbox <strong>@poBox</strong>.
+            @if (Model.FromDate.HasValue || Model.ToDate.HasValue)
+            {
+                <span>Filtered to deposit dates @(Model.FromDate?.ToString("yyyy-MM-dd") ?? "any") through @(Model.ToDate?.ToString("yyyy-MM-dd") ?? "any").</span>
+            }
+            else
+            {
+                <span>All deposit dates — use From/To above to filter.</span>
+            }
+        </p>
+    </div>
+    @if (Model.StagingRows.Count == 0)
+    {
+        <div class="card-body text-center py-5">
+            <p class="text-muted mb-2">No staging rows found for the selected filters.</p>
+            <a href="@(pathBase)/Integrations/@integration/Lockbox/LockboxFiles" class="btn btn-outline-primary btn-sm">Clear filters</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive caei-scroll-y-400">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="sticky-top bg-white">
+                    <tr>
+                        <th scope="col" title="LockboxNumber">Lockbox</th>
+                        <th scope="col" title="DepositDate">Deposit</th>
+                        <th scope="col" title="BatchNumber">Batch</th>
+                        <th scope="col" title="SeqNumber">Seq #</th>
+                        <th scope="col" title="BankNumber">Bank routing</th>
+                        <th scope="col" title="AccountNumber">Account</th>
+                        <th scope="col" title="CheckNumber">Check #</th>
+                        <th scope="col" title="RemitterName">Remitter</th>
+                        <th scope="col" class="text-end" title="CheckAmount">Check amt</th>
+                        <th scope="col" title="BillingId">Billing ID</th>
+                        <th scope="col" title="AccessionFull">Accession</th>
+                        <th scope="col" class="text-end" title="InvAmt">Invoice amt</th>
+                        <th scope="col" title="ValidationStatus">Status</th>
+                        <th scope="col" title="ValidationNotes">Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.StagingRows)
+                    {
+                        <tr>
+                            <td>@row.LockboxNumber</td>
+                            <td>@row.DepositDate.ToString("yyyy-MM-dd")</td>
+                            <td>@row.BatchNumber</td>
+                            <td>@row.SeqNumber</td>
+                            <td>@row.BankNumber</td>
+                            <td>@row.AccountNumber</td>
+                            <td>@row.CheckNumber</td>
+                            <td>@row.RemitterName</td>
+                            <td class="text-end">@row.CheckAmount.ToString("N2")</td>
+                            <td>@(row.BillingId ?? "—")</td>
+                            <td>@(row.AccessionFull ?? "—")</td>
+                            <td class="text-end">@(row.InvAmt.HasValue ? row.InvAmt.Value.ToString("N2") : "—")</td>
+                            <td>
+                                <span class="badge @(row.ValidationStatus == "VALID" ? "bg-success" : row.ValidationStatus == "WARN" ? "bg-warning text-dark" : row.ValidationStatus == "ERROR" ? "bg-danger" : "bg-secondary")">
+                                    @row.ValidationStatus
+                                </span>
+                            </td>
+                            <td class="small text-muted">@(row.ValidationNotes ?? "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

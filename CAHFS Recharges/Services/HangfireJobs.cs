@@ -1,5 +1,7 @@
 using CAHFS_Recharges.Data;
 using CAHFS_Recharges.Models;
+using CAHFS_Recharges.Models.Options;
+using CAHFS_Recharges.Services.Lockbox;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -22,7 +24,18 @@ namespace CAHFS_Recharges.Services
     ///    - Scope: Processes up to 250 items per run (configurable via Hangfire:ValidationBatchSize)
     ///    - Concurrency: Disabled (only one instance runs at a time, 60-min lock)
     /// 
-    /// 2. WednesdaySendLastWeek (SendLastWeekBatchesJob)
+    /// 2. LockboxDailyIngest (IngestLockboxFilesJob)
+    ///    - Schedule: Daily at 3:00 AM (configurable via Lockbox:CronDaily)
+    ///    - Purpose: Downloads BofA lockbox files from SFTP for previous calendar day (Pacific)
+    ///    - Chains LockboxProcessFiles at end of each run
+    ///    - Scope: CAHFS (744833) and EQUINE (744835), separate financial databases
+    ///    - Concurrency: Disabled (60-min lock)
+    ///
+    /// 3. LockboxProcessFiles (ProcessLockboxFilesJob)
+    ///    - Schedule: Daily at 3:15 AM (configurable via Lockbox:CronProcess)
+    ///    - Purpose: Bulk-load C_LB_Raw_Line and EXEC C_LB_Process_File for Pending/Error files
+    ///
+    /// 4. WednesdaySendLastWeek (SendLastWeekBatchesJob)
     ///    - Schedule: Wednesdays at 3:00 AM (configurable via Hangfire:CronWednesday)
     ///    - Purpose: Automatically sends Ready batches from the previous week to Aggie Enterprise
     ///    - Scope: Only sends batches where:
@@ -75,6 +88,47 @@ namespace CAHFS_Recharges.Services
             _logger.LogInformation("Hangfire: COA validation EQUINE completed. Items updated: {Updated}", updatedEquine);
 
             _logger.LogInformation("Hangfire: COA validation completed. CAHFS={Cahfs}, EQUINE={Equine}", updatedCahfs, updatedEquine);
+        }
+
+        [DisableConcurrentExecution(60 * 60)]
+        public async Task IngestLockboxFilesJob()
+        {
+            using var scope = _services.CreateScope();
+            var options = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<LockboxOptions>>().Value;
+
+            if (!options.Enabled)
+            {
+                _logger.LogInformation("Hangfire: Lockbox ingest skipped (Lockbox:Enabled=false).");
+                return;
+            }
+
+            var ingest = scope.ServiceProvider.GetRequiredService<LockboxSftpIngestService>();
+            _logger.LogInformation("Hangfire: starting Lockbox SFTP ingest.");
+            await ingest.RunNightlyIngestAsync();
+            _logger.LogInformation("Hangfire: Lockbox SFTP ingest finished.");
+
+            var process = scope.ServiceProvider.GetRequiredService<LockboxFileProcessService>();
+            _logger.LogInformation("Hangfire: starting Lockbox parse/staging (post-ingest).");
+            await process.ProcessPendingFilesAsync();
+            _logger.LogInformation("Hangfire: Lockbox parse/staging finished (post-ingest).");
+        }
+
+        [DisableConcurrentExecution(60 * 60)]
+        public async Task ProcessLockboxFilesJob()
+        {
+            using var scope = _services.CreateScope();
+            var options = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<LockboxOptions>>().Value;
+
+            if (!options.Enabled)
+            {
+                _logger.LogInformation("Hangfire: Lockbox process skipped (Lockbox:Enabled=false).");
+                return;
+            }
+
+            var process = scope.ServiceProvider.GetRequiredService<LockboxFileProcessService>();
+            _logger.LogInformation("Hangfire: starting Lockbox parse/staging.");
+            await process.ProcessPendingFilesAsync();
+            _logger.LogInformation("Hangfire: Lockbox parse/staging finished.");
         }
 
         [DisableConcurrentExecution(2 * 60 * 60)]

@@ -27,6 +27,15 @@
         "EQUINE" => "theme-equine",
         _ => ""
     };
+
+    var productFamily = ViewData["ProductFamily"] as string ?? nameof(ProductFamily.AE);
+    var isLockbox = productFamily.Equals(nameof(ProductFamily.Lockbox), StringComparison.OrdinalIgnoreCase);
+    var workspaceThemeClass = isLockbox ? $"{integrationThemeClass} theme-lockbox" : integrationThemeClass;
+
+    var workspaceTitle = isLockbox
+        ? $"{integrationDisplayName} → GP"
+        : $"{integrationDisplayName} → AE";
+    var workspaceSubtitle = "Integration Workspace";
     
     // Navigation URLs
     IntegrationTypeExtensions.TryParse(integration, out var integrationType);
@@ -34,16 +43,22 @@
     var coaValidationPage = IntegrationLinkHelper.GetCoaValidationPage(integrationType);
     var sentHistoryPage = IntegrationLinkHelper.GetSentHistoryPage(integrationType);
     var manualSendPage = IntegrationLinkHelper.GetManualSendPage(integrationType);
+    var lockboxStagingPage = IntegrationLinkHelper.GetLockboxFilesPage(integrationType);
+    var lockboxCheckPage = IntegrationLinkHelper.GetLockboxCheckValidationsPage(integrationType);
+    var lockboxHistoryPage = IntegrationLinkHelper.GetLockboxSentHistoryPage(integrationType);
     
     // Current page for active tab detection
     var currentPath = Context.Request.Path.Value?.ToLowerInvariant() ?? "";
-    var isStaging = currentPath.Contains("feedreview") || (currentPath.Contains("staging") && !currentPath.Contains("coa") && !currentPath.Contains("send"));
+    var isStaging = currentPath.Contains("feedreview") || (currentPath.Contains("/staging/") && !currentPath.Contains("coa") && !currentPath.Contains("send"));
     var isCoa = currentPath.Contains("coavalidation");
-    var isHistory = currentPath.Contains("history") || currentPath.Contains("senthistory");
-    var isSend = currentPath.Contains("sendtoaggieenterprise") || currentPath.Contains("send");
+    var isHistory = currentPath.Contains("/history/") || currentPath.Contains("senthistory");
+    var isSend = currentPath.Contains("sendtoaggieenterprise");
+    var isLockboxStaging = currentPath.Contains("lockboxfiles");
+    var isLockboxCheck = currentPath.Contains("/lockbox/checkvalidations");
+    var isLockboxHistory = currentPath.Contains("/lockbox/senthistory");
 }
 
-<header class="caei-header-wrapper @integrationThemeClass">
+<header class="caei-header-wrapper @workspaceThemeClass">
     @if (hasIntegration)
     {
         @* ===== WORKSPACE HEADER (React Full Layout) ===== *@
@@ -81,10 +96,10 @@
                                     }
                                 </div>
                                 <div class="caei-integration-text">
-                                    <p class="caei-integration-title">@integrationDisplayName → AE</p>
-                                    <p class="caei-integration-subtitle">Integration Workspace</p>
+                                    <p class="caei-integration-title">@workspaceTitle</p>
+                                    <p class="caei-integration-subtitle">@workspaceSubtitle</p>
                                 </div>
-                                <span class="caei-badge @(integrationUpper == "EQUINE" ? "equine" : "cahfs")">@integrationDisplayName</span>
+                                <span class="caei-badge @(integrationUpper == "EQUINE" ? "equine" : "cahfs")@(isLockbox ? " lockbox" : "")">@integrationDisplayName</span>
                             </div>
                         </div>
                         
@@ -108,30 +123,54 @@
                     
                     @* Navigation Tabs (Pill/Button Style) *@
                     <nav class="caei-nav" role="navigation" aria-label="Workspace navigation">
-                        <a href="@(Context.Request.PathBase)@stagingPage" class="caei-nav-pill @(isStaging ? "active" : "")">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
-                            </svg>
-                            Staging Data
-                        </a>
-                        <a href="@(Context.Request.PathBase)@coaValidationPage" class="caei-nav-pill @(isCoa ? "active" : "")">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                            </svg>
-                            COA Validations
-                        </a>
-                        <a href="@(Context.Request.PathBase)@sentHistoryPage" class="caei-nav-pill @(isHistory ? "active" : "")">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            Sent History
-                        </a>
-                        <a href="@(Context.Request.PathBase)@manualSendPage" class="caei-nav-pill @(isSend ? "active" : "")">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                            </svg>
-                            Send to AE
-                        </a>
+                        @if (isLockbox)
+                        {
+                            <a href="@(Context.Request.PathBase)@lockboxStagingPage" class="caei-nav-pill @(isLockboxStaging ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                                </svg>
+                                Lockbox Staging
+                            </a>
+                            <a href="@(Context.Request.PathBase)@lockboxCheckPage" class="caei-nav-pill @(isLockboxCheck ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                                Check Validations
+                            </a>
+                            <a href="@(Context.Request.PathBase)@lockboxHistoryPage" class="caei-nav-pill @(isLockboxHistory ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                Sent History
+                            </a>
+                        }
+                        else
+                        {
+                            <a href="@(Context.Request.PathBase)@stagingPage" class="caei-nav-pill @(isStaging ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                                </svg>
+                                Staging Data
+                            </a>
+                            <a href="@(Context.Request.PathBase)@coaValidationPage" class="caei-nav-pill @(isCoa ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                                COA Validations
+                            </a>
+                            <a href="@(Context.Request.PathBase)@sentHistoryPage" class="caei-nav-pill @(isHistory ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                Sent History
+                            </a>
+                            <a href="@(Context.Request.PathBase)@manualSendPage" class="caei-nav-pill @(isSend ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                                </svg>
+                                Send to AE
+                            </a>
+                        }
                         @if (isAdmin)
                         {
                             <a href="@(Context.Request.PathBase)/hangfire" class="caei-nav-pill">
@@ -161,7 +200,7 @@
                             </svg>
                         </div>
                         <div class="caei-app-text">
-                            <p class="caei-app-title">CAHFS AE Integration</p>
+                            <p class="caei-app-title">CAHFS Integration Hub</p>
                             <p class="caei-app-subtitle">California Animal Health and Food Safety</p>
                         </div>
                     </div>

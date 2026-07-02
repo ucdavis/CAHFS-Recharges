@@ -1,0 +1,15 @@
+@page "/Integrations/{integration}/Lockbox/CheckValidations"
+@model CAHFS_Recharges.Pages.Integrations.Lockbox.CheckValidationsModel
+@{
+    ViewData["Title"] = "Check Validations";
+    var integration = ViewData["Integration"] as string ?? "CAHFS";
+}
+
+<div class="mb-4">
+    <h1 class="h3 mb-1">Check Validations</h1>
+    <p class="text-muted mb-0">Review lockbox payment validation results before Great Plains posting (@integration).</p>
+</div>
+
+<div class="alert alert-info" role="status">
+    Check validation workspace is coming soon. Use <strong>Lockbox Staging</strong> in the header to review parsed payments.
+</div>

@@ -5,6 +5,7 @@ namespace CAHFS_Recharges.Services
     public class IntegrationContextService : IIntegrationContextService
     {
         public const string CookieName = "CAEI.Integration";
+        public const string ProductFamilyCookieName = "CAEI.ProductFamily";
         public const string RouteKey = "integration";
 
         private static readonly TimeSpan CookieExpiry = TimeSpan.FromDays(30);
@@ -36,6 +37,24 @@ namespace CAHFS_Recharges.Services
         }
 
         /// <inheritdoc />
+        public ProductFamily? ResolveProductFamily(HttpContext httpContext)
+        {
+            var path = httpContext.Request.Path.Value ?? string.Empty;
+            if (path.Contains("/Lockbox/", StringComparison.OrdinalIgnoreCase))
+                return ProductFamily.Lockbox;
+
+            if (path.Contains("/Staging/", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("/History/", StringComparison.OrdinalIgnoreCase))
+                return ProductFamily.AE;
+
+            if (httpContext.Request.Cookies.TryGetValue(ProductFamilyCookieName, out var cookieValue) &&
+                ProductFamilyExtensions.TryParse(cookieValue, out var fromCookie))
+                return fromCookie;
+
+            return null;
+        }
+
+        /// <inheritdoc />
         public void SetIntegrationCookie(HttpContext httpContext, IntegrationType integration)
         {
             var options = new CookieOptions
@@ -54,6 +73,27 @@ namespace CAHFS_Recharges.Services
         public void ClearIntegrationCookie(HttpContext httpContext)
         {
             httpContext.Response.Cookies.Delete(CookieName);
+        }
+
+        /// <inheritdoc />
+        public void SetProductFamilyCookie(HttpContext httpContext, ProductFamily productFamily)
+        {
+            var options = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTimeOffset.UtcNow.Add(CookieExpiry),
+                IsEssential = true
+            };
+
+            httpContext.Response.Cookies.Append(ProductFamilyCookieName, productFamily.ToString(), options);
+        }
+
+        /// <inheritdoc />
+        public void ClearProductFamilyCookie(HttpContext httpContext)
+        {
+            httpContext.Response.Cookies.Delete(ProductFamilyCookieName);
         }
     }
 }

@@ -5,7 +5,10 @@ using CAHFS_Recharges.Authorization;
 using CAHFS_Recharges.Data;
 using CAHFS_Recharges.Middleware;
 using CAHFS_Recharges.Models;
+using CAHFS_Recharges.Models.Options;
+using Microsoft.Extensions.Options;
 using CAHFS_Recharges.Services;
+using CAHFS_Recharges.Services.Lockbox;
 using Hangfire;
 using Hangfire.SqlServer;
 using Joonasw.AspNetCore.SecurityHeaders;
@@ -261,6 +264,15 @@ try
 
     // CAHFS Services
 
+    // BofA Lockbox — appsettings "Lockbox" + SFTP secrets from /{Environment}/Credentials/LockBoxUsername|LockBoxPassword (flat, like AE)
+    builder.Services.Configure<LockboxOptions>(builder.Configuration.GetSection(LockboxOptions.SectionName));
+    builder.Services.AddSingleton<IPostConfigureOptions<LockboxOptions>, LockboxOptionsConfiguration>();
+    builder.Services.AddScoped<LockboxSftpClient>();
+    builder.Services.AddScoped<LockboxMissingFileAlertService>();
+    builder.Services.AddScoped<LockboxSftpIngestService>();
+    builder.Services.AddScoped<LockboxFileProcessService>();
+    builder.Services.AddScoped<LockboxReadService>();
+
     // Integration Context
     builder.Services.AddScoped<IIntegrationContextService, IntegrationContextService>();
 
@@ -379,6 +391,37 @@ try
             job => job.SendLastWeekBatchesJob(),
             hangCronWed,
             new RecurringJobOptions { TimeZone = tz });
+
+        var lockboxEnabled = builder.Configuration.GetValue<bool?>("Lockbox:Enabled") ?? true;
+        if (lockboxEnabled)
+        {
+            var lockboxCron = builder.Configuration.GetValue<string>("Lockbox:CronDaily") ?? "0 3 * * *";
+            var lockboxTzId = builder.Configuration.GetValue<string>("Lockbox:TimeZone");
+            TimeZoneInfo lockboxTz;
+            try
+            {
+                lockboxTz = !string.IsNullOrWhiteSpace(lockboxTzId)
+                    ? TimeZoneInfo.FindSystemTimeZoneById(lockboxTzId!)
+                    : tz;
+            }
+            catch
+            {
+                lockboxTz = tz;
+            }
+
+            RecurringJob.AddOrUpdate<HangfireJobs>(
+                "LockboxDailyIngest",
+                job => job.IngestLockboxFilesJob(),
+                lockboxCron,
+                new RecurringJobOptions { TimeZone = lockboxTz });
+
+            var lockboxProcessCron = builder.Configuration.GetValue<string>("Lockbox:CronProcess") ?? "15 3 * * *";
+            RecurringJob.AddOrUpdate<HangfireJobs>(
+                "LockboxProcessFiles",
+                job => job.ProcessLockboxFilesJob(),
+                lockboxProcessCron,
+                new RecurringJobOptions { TimeZone = lockboxTz });
+        }
     }
 
     app.Run();

@@ -1,4 +1,5 @@
 using CAHFS_Recharges.Models;
+using CAHFS_Recharges.Models.Lockbox;
 using Microsoft.EntityFrameworkCore;
 
 namespace CAHFS_Recharges.Services
@@ -12,6 +13,14 @@ namespace CAHFS_Recharges.Services
         DbSet<FeedItem> GetFeedItems(IntegrationType integration);
 
         DbSet<CoaCorrectionAudit> GetCoaCorrectionAudits(IntegrationType integration);
+
+        DbSet<LockboxFile> GetLockboxFiles(IntegrationType integration);
+
+        DbSet<LockboxIngestRun> GetLockboxIngestRuns(IntegrationType integration);
+
+        DbSet<LockboxDailyReceipt> GetLockboxDailyReceipts(IntegrationType integration);
+
+        DbSet<LockboxAlertState> GetLockboxAlertStates(IntegrationType integration);
 
         Task<int> SaveChangesAsync(IntegrationType integration, CancellationToken ct = default);
 

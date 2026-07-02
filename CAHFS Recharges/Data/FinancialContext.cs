@@ -1,4 +1,5 @@
 using CAHFS_Recharges.Models;
+using CAHFS_Recharges.Models.Lockbox;
 using Microsoft.EntityFrameworkCore;
 
 namespace CAHFS_Recharges.Data
@@ -8,6 +9,10 @@ namespace CAHFS_Recharges.Data
         public virtual DbSet<FeedBatch> FeedBatches { get; set; } = null!;
         public virtual DbSet<FeedItem> FeedItems { get; set; } = null!;
         public virtual DbSet<CoaCorrectionAudit> CoaCorrectionAudits { get; set; } = null!;
+        public virtual DbSet<LockboxFile> LockboxFiles { get; set; } = null!;
+        public virtual DbSet<LockboxIngestRun> LockboxIngestRuns { get; set; } = null!;
+        public virtual DbSet<LockboxDailyReceipt> LockboxDailyReceipts { get; set; } = null!;
+        public virtual DbSet<LockboxAlertState> LockboxAlertStates { get; set; } = null!;
 
 
         public FinancialContext()
@@ -26,7 +31,7 @@ namespace CAHFS_Recharges.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             FinancialContextConfiguration.ConfigureFeedBatchAndItems(modelBuilder);
-            // CoaCorrectionAudit uses data annotations from the model class
+            LockboxContextConfiguration.ConfigureLockbox(modelBuilder);
         }
     }
 }

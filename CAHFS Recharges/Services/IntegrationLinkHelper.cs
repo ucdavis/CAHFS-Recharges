@@ -41,6 +41,29 @@ namespace CAHFS_Recharges.Services
             return $"/Integrations/{v}/History/SentHistory";
         }
 
+        public static string GetLockboxFilesPage(IntegrationType? integration)
+        {
+            var v = EffectiveIntegration(integration);
+            return $"/Integrations/{v}/Lockbox/LockboxFiles";
+        }
+
+        public static string GetLockboxCheckValidationsPage(IntegrationType? integration)
+        {
+            var v = EffectiveIntegration(integration);
+            return $"/Integrations/{v}/Lockbox/CheckValidations";
+        }
+
+        public static string GetLockboxSentHistoryPage(IntegrationType? integration)
+        {
+            var v = EffectiveIntegration(integration);
+            return $"/Integrations/{v}/Lockbox/SentHistory";
+        }
+
+        public static string GetDefaultLandingPage(IntegrationType integration, ProductFamily family) =>
+            family == ProductFamily.Lockbox
+                ? GetLockboxFilesPage(integration)
+                : GetStagingDataPage(integration);
+
         /// Validates that the integration string is valid (CAHFS or EQUINE).
         public static IntegrationType? ValidateIntegration(string? integration)
         {

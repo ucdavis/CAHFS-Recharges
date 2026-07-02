@@ -54,7 +54,7 @@ namespace CAHFS_Recharges.Models
             var val = Settings == null
                 ? default
                 : Settings.GetSection(section).GetValue<T>(setting);
-            logger.Warn("section " + section + " " + val == null ? "null" : val.ToString().Length);
+            logger.Warn("section " + section + " " + (val == null ? "null" : val.ToString()?.Length.ToString()));
             return Settings == null
                 ? default
                 : Settings.GetSection(section).GetValue<T>(setting);

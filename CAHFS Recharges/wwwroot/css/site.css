@@ -685,6 +685,17 @@ small, .text-sm {
   background-color: var(--gpare-primary, #3DAE2B);
 }
 
+.theme-lockbox .caei-nav-pill:hover,
+.theme-lockbox .caei-nav-pill.active {
+  background-color: var(--gparc-primary, #022851);
+  box-shadow: inset 0 -2px 0 #DAAA00;
+}
+
+.caei-badge.cahfs.lockbox,
+.caei-badge.equine.lockbox {
+  border: 2px solid #DAAA00;
+}
+
 /* Admin Badge */
 .caei-admin-badge {
   font-size: 0.75rem;

@@ -23,18 +23,21 @@ namespace CAHFS_Recharges.Pages
             // Home page just displays integration selection
         }
 
-        public IActionResult OnPostSelectIntegration(string integration)
+        public IActionResult OnPostSelectIntegration(string integration, string? family)
         {
             if (!IntegrationTypeExtensions.TryParse(integration, out var integrationType))
             {
                 return RedirectToPage();
             }
 
-            _integrationService.SetIntegrationCookie(HttpContext, integrationType);
+            if (!ProductFamilyExtensions.TryParse(family, out var productFamily))
+                productFamily = ProductFamily.AE;
 
-            // Always redirect to route-based URL: /Integrations/{integration}/Staging/FeedReview
+            _integrationService.SetIntegrationCookie(HttpContext, integrationType);
+            _integrationService.SetProductFamilyCookie(HttpContext, productFamily);
+
             var pathBase = HttpContext.Request.PathBase.Value ?? "";
-            var redirectUrl = pathBase + IntegrationLinkHelper.GetStagingDataPage(integrationType);
+            var redirectUrl = pathBase + IntegrationLinkHelper.GetDefaultLandingPage(integrationType, productFamily);
             return Redirect(redirectUrl);
         }
     }

@@ -14,25 +14,25 @@
     .home-content {
         max-width: 80rem;
         margin: 0 auto;
-        padding: 3rem 1rem;
+        padding: 2rem 1rem;
     }
     
     @@media (min-width: 640px) {
         .home-content {
-            padding: 3rem 1.5rem;
+            padding: 2rem 1.5rem;
         }
     }
     
     @@media (min-width: 1024px) {
         .home-content {
-            padding: 3rem 2rem;
+            padding: 2rem 2rem;
         }
     }
     
     /* Welcome section */
     .home-welcome {
         text-align: center;
-        margin-bottom: 3rem;
+        margin-bottom: 2rem;
     }
     
     .home-welcome h2 {
@@ -63,8 +63,8 @@
     .integration-grid {
         display: grid;
         grid-template-columns: 1fr;
-        gap: 1.5rem;
-        max-width: 64rem;
+        gap: 1.25rem;
+        max-width: 58rem;
         margin: 0 auto;
     }
     
@@ -79,7 +79,7 @@
         background-color: #fff;
         border: 2px solid var(--gray-200, #e5e7eb);
         border-radius: 0.75rem;
-        padding: 2rem;
+        padding: 1.625rem;
         transition: all 0.3s ease;
         cursor: pointer;
     }
@@ -105,13 +105,13 @@
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
     }
     
     .integration-icon {
-        width: 64px;
-        height: 64px;
-        border-radius: 0.75rem;
+        width: 56px;
+        height: 56px;
+        border-radius: 0.625rem;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -157,27 +157,27 @@
     }
     
     .integration-content {
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.25rem;
     }
     
     .integration-title {
-        font-size: 1.5rem;
+        font-size: 1.25rem;
         font-weight: 600;
         color: var(--gray-900, #111827);
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.35rem;
     }
     
     .integration-desc {
         color: var(--gray-600, #4b5563);
-        font-size: 0.9375rem;
-        margin-bottom: 1rem;
+        font-size: 0.875rem;
+        margin-bottom: 0;
         line-height: 1.5;
     }
     
     /* Getting Started Info Card */
     .info-card {
-        max-width: 48rem;
-        margin: 4rem auto 0;
+        max-width: 58rem;
+        margin: 2rem auto 0;
         background-color: rgba(111, 207, 235, 0.1);
         border: 1px solid rgba(0, 178, 227, 0.3);
         border-radius: 0.75rem;
@@ -213,21 +213,6 @@
         line-height: 1.5;
     }
     
-    .info-tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    
-    .info-tag {
-        padding: 0.25rem 0.75rem;
-        background-color: #fff;
-        border: 1px solid rgba(0, 178, 227, 0.3);
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        color: var(--gray-700, #374151);
-    }
-    
     @@media (max-width: 640px) {
         .info-card {
             flex-direction: column;
@@ -241,8 +226,8 @@
         align-items: center;
         justify-content: center;
         gap: 0.5rem;
-        padding: 0.75rem 1.5rem;
-        font-size: 1rem;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.9375rem;
         font-weight: 500;
         border-radius: 0.5rem;
         border: none;
@@ -276,6 +261,85 @@
         background-color: var(--gpare-hover, #2d8a22);
         color: #fff;
     }
+
+    .home-section {
+        max-width: 58rem;
+        margin: 0 auto 2rem;
+    }
+
+    .home-section:last-of-type {
+        margin-bottom: 0;
+    }
+
+    .home-section-title {
+        font-size: calc(1.0625rem + 2pt);
+        font-weight: 600;
+        color: var(--gray-700, #374151);
+        margin: 0 0 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--gray-200, #e5e7eb);
+    }
+
+    .integration-card.lockbox:hover {
+        border-color: rgba(218, 170, 0, 0.45);
+    }
+
+    .integration-card.lockbox.equine:hover {
+        border-color: rgba(218, 170, 0, 0.45);
+    }
+
+    .integration-icon.lockbox {
+        background-color: #022851;
+        border: 2px solid #DAAA00;
+    }
+
+    .integration-icon.lockbox.equine {
+        background-color: var(--gpare-primary, #3DAE2B);
+        border: 2px solid #DAAA00;
+    }
+
+    .btn-lockbox {
+        background-color: #022851;
+        border: 2px solid #DAAA00;
+    }
+
+    .btn-lockbox:hover {
+        background-color: var(--gparc-hover, #011a33);
+        color: #fff;
+    }
+
+    .btn-lockbox.equine {
+        background-color: var(--gpare-primary, #3DAE2B);
+        border: 2px solid #DAAA00;
+    }
+
+    .btn-lockbox.equine:hover {
+        background-color: var(--gpare-hover, #2d8a22);
+        color: #fff;
+    }
+
+    .integration-pobox {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--gray-600, #4b5563);
+        margin: 0;
+    }
+
+    .info-card-content ul {
+        font-size: 0.875rem;
+        color: var(--gray-700, #374151);
+        margin: 0;
+        padding-left: 1.25rem;
+        line-height: 1.55;
+    }
+
+    .info-card-content ul li {
+        margin-bottom: 0.35rem;
+    }
+
+    .info-card-content ul li:last-child {
+        margin-bottom: 0;
+    }
 </style>
 
 <div class="home-page">
@@ -286,12 +350,14 @@
             <p>Select an integration to begin working</p>
         </div>
 
-        <div class="integration-grid">
+        <div class="home-section">
+            <h2 class="home-section-title">Aggie Enterprise Integration</h2>
+            <div class="integration-grid">
             @* CAHFS Integration Card *@
             <div class="integration-card cahfs">
                 <div class="integration-card-header">
                     <div class="integration-icon cahfs" aria-hidden="true">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 16 16">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm.5-5v1h1a.5.5 0 0 1 0 1h-1v1a.5.5 0 0 1-1 0v-1h-1a.5.5 0 0 1 0-1h1v-1a.5.5 0 0 1 1 0Z"/>
                             <path d="M2 1a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6.5a.5.5 0 0 1-1 0V1H3v14h3a.5.5 0 0 1 0 1H2a1 1 0 0 1-1-1V1Z"/>
                             <path d="M4 3a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H4Zm0 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H4Zm0 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H4Z"/>
@@ -310,6 +376,7 @@
                 </div>
                 <form method="post" asp-page-handler="SelectIntegration">
                     <input type="hidden" name="integration" value="CAHFS" />
+                    <input type="hidden" name="family" value="AE" />
                     <button type="submit" class="btn-integration btn-cahfs">
                         Open CAHFS
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -323,7 +390,7 @@
             <div class="integration-card equine">
                 <div class="integration-card-header">
                     <div class="integration-icon equine" aria-hidden="true">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 16 16">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zM.146 10.146a.5.5 0 0 1 .708 0L2 11.293V7a6 6 0 1 1 12 0v4.293l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L13 11.293V7a5 5 0 0 0-10 0v4.293l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 0-.708z"/>
                         </svg>
                     </div>
@@ -340,6 +407,7 @@
                 </div>
                 <form method="post" asp-page-handler="SelectIntegration">
                     <input type="hidden" name="integration" value="EQUINE" />
+                    <input type="hidden" name="family" value="AE" />
                     <button type="submit" class="btn-integration btn-equine">
                         Open EACL
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -347,6 +415,72 @@
                         </svg>
                     </button>
                 </form>
+            </div>
+            </div>
+        </div>
+
+        <div class="home-section">
+            <h2 class="home-section-title">Bank of America Lockbox Integration</h2>
+            <div class="integration-grid">
+            @* CAHFS Lockbox Card *@
+            <div class="integration-card lockbox">
+                <div class="integration-card-header">
+                    <div class="integration-icon lockbox" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
+                            <path d="M0 4a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V4zm2 1v6h12V5H2z"/>
+                        </svg>
+                    </div>
+                    <div class="status-indicator">
+                        <div class="status-dot"></div>
+                        Active
+                    </div>
+                </div>
+                <div class="integration-content">
+                    <h3 class="integration-title">CAHFS Lockbox</h3>
+                    <p class="integration-pobox">PO Box 744833</p>
+                </div>
+                <form method="post" asp-page-handler="SelectIntegration">
+                    <input type="hidden" name="integration" value="CAHFS" />
+                    <input type="hidden" name="family" value="Lockbox" />
+                    <button type="submit" class="btn-integration btn-lockbox">
+                        Open Lockbox
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+
+            @* EACL Lockbox Card *@
+            <div class="integration-card lockbox equine">
+                <div class="integration-card-header">
+                    <div class="integration-icon lockbox equine" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
+                            <path d="M0 4a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V4zm2 1v6h12V5H2z"/>
+                        </svg>
+                    </div>
+                    <div class="status-indicator">
+                        <div class="status-dot"></div>
+                        Active
+                    </div>
+                </div>
+                <div class="integration-content">
+                    <h3 class="integration-title">EACL Lockbox</h3>
+                    <p class="integration-pobox">PO Box 744835</p>
+                </div>
+                <form method="post" asp-page-handler="SelectIntegration">
+                    <input type="hidden" name="integration" value="EQUINE" />
+                    <input type="hidden" name="family" value="Lockbox" />
+                    <button type="submit" class="btn-integration btn-lockbox equine">
+                        Open Lockbox
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
             </div>
         </div>
 
@@ -359,15 +493,11 @@
             </div>
             <div class="info-card-content">
                 <h3>Getting Started</h3>
-                <p>
-                    Each integration workspace provides access to accession records, data synchronization tools,
-                    and export functionality specific to that database context.
-                </p>
-                <div class="info-tags">
-                    <span class="info-tag">Data Sync</span>
-                    <span class="info-tag">Export Tools</span>
-                    <span class="info-tag">Record Management</span>
-                </div>
+                <p>Select the lab and integration type for your work. Each workspace opens with tools specific to that system.</p>
+                <ul>
+                    <li><strong>Aggie Enterprise (CAHFS or EACL):</strong> Review staged billing data, fix COA validation errors, send journals to Aggie Enterprise, and view submission history.</li>
+                    <li><strong>Bank of America Lockbox (CAHFS or EACL):</strong> Review daily lockbox files, match checks to Great Plains invoices, post payments, and view payment history.</li>
+                </ul>
             </div>
         </div>
     </div>

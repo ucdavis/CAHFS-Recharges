@@ -79,6 +79,11 @@ namespace CAHFS_Recharges.Pages
             ViewData["IsAdmin"] = await IsAdminAsync();
             ViewData["IsOperator"] = await IsOperatorAsync();
 
+            var productFamily = _integrationService.ResolveProductFamily(HttpContext);
+            if (productFamily.HasValue)
+                _integrationService.SetProductFamilyCookie(HttpContext, productFamily.Value);
+            ViewData["ProductFamily"] = productFamily?.ToString() ?? nameof(ProductFamily.AE);
+
             await next();
         }
 

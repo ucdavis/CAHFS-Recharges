@@ -36,19 +36,16 @@ namespace CAHFS_Recharges.Pages.Integrations.Lockbox
         [BindProperty(SupportsGet = true)]
         public string? Status { get; set; }
 
-        [BindProperty(SupportsGet = true)]
-        public string? FileName { get; set; }
-
         public async Task<IActionResult> OnGetAsync()
         {
             if (CurrentIntegration == null)
                 return RedirectToPage("/Home");
 
             Summary = await _readService.GetStagingSummaryAsync(
-                ResolvedIntegration, FromDate?.Date, ToDate?.Date, Status, FileName);
+                ResolvedIntegration, FromDate?.Date, ToDate?.Date, Status, fileName: null);
 
             StagingRows = await _readService.GetStagingRowsAsync(
-                ResolvedIntegration, FromDate?.Date, ToDate?.Date, Status, FileName);
+                ResolvedIntegration, FromDate?.Date, ToDate?.Date, Status, fileName: null);
 
             return Page();
         }

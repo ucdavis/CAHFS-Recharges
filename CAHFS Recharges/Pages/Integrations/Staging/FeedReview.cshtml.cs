@@ -63,16 +63,41 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
         [BindProperty(SupportsGet = true)]
         public Guid? SelectedBatchId { get; set; }
 
-        // Show only invalid items for selected batch (Debit OR Credit)
+        // Show only invalid items for selected batch (Debit OR Credit); excludes DoNotInclude
         [BindProperty(SupportsGet = true)]
         public bool ShowInvalidOnly { get; set; } = false;
 
+        // Show only excluded (DoNotInclude) items for selected batch
+        [BindProperty(SupportsGet = true)]
+        public bool ShowExcludedOnly { get; set; } = false;
+
         public string? SelectedBatchJournalName { get; set; }
+
+        /// <summary>True when operator can re-include excluded items (batch not posted to AE).</summary>
+        public bool CanIncludeExcludedItems { get; set; }
 
         public IList<FeedBatch> Batches { get; set; } = new List<FeedBatch>();
         public IList<FeedItem> Items { get; set; } = new List<FeedItem>();
-        // Count of items where debit or credit COA is not exactly Valid (null/empty/other), across filtered batches.</summary>
+        // Count of included items where debit or credit COA is not exactly Valid (null/empty/other), across filtered batches.
         public int InvalidItemsCount { get; set; }
+
+        private static bool IsBatchPostedToAe(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return false;
+            return status.Equals("Validated", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("Success", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("Sent", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("Complete", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("Completed", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void NormalizeItemFilters()
+        {
+            // Prefer excluded view when both flags are present
+            if (ShowExcludedOnly && ShowInvalidOnly)
+                ShowInvalidOnly = false;
+        }
 
         // POST: Validate pending COA
         public async Task<IActionResult> OnPostValidatePendingAsync()
@@ -91,19 +116,83 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             });
         }
 
+        // POST: Re-include an excluded item (Operator+, batch not posted to AE)
+        public async Task<IActionResult> OnPostIncludeItemAsync(Guid recordId)
+        {
+            NormalizeItemFilters();
+
+            string ExcludedUrl(Guid? batchId = null)
+            {
+                var id = batchId ?? SelectedBatchId;
+                var qs = new List<string>
+                {
+                    $"FromDate={FromDate?.ToString("yyyy-MM-dd")}",
+                    $"ToDate={ToDate?.ToString("yyyy-MM-dd")}",
+                    $"Status={Uri.EscapeDataString(Status ?? "")}",
+                    $"JournalName={Uri.EscapeDataString(JournalName ?? "")}",
+                    $"SelectedBatchId={id}",
+                    "ShowExcludedOnly=true"
+                };
+                return $"{Request.PathBase}/Integrations/{Integration}/Staging/FeedReview?{string.Join("&", qs)}#items";
+            }
+
+            if (!await IsOperatorAsync())
+            {
+                SetErrorMessage("You do not have permission to perform this action.");
+                return Redirect(ExcludedUrl());
+            }
+
+            var feedItems = _dbResolver.GetFeedItems(ResolvedIntegration);
+            var item = await feedItems.FirstOrDefaultAsync(i => i.RecordID == recordId);
+            if (item == null)
+            {
+                SetErrorMessage("Record not found.");
+                return Redirect(ExcludedUrl());
+            }
+
+            if (!item.DoNotInclude)
+            {
+                SetInfoMessage("Item is already included in this batch.");
+                return Redirect(ExcludedUrl(item.BatchID));
+            }
+
+            var batch = await _dbResolver.GetFeedBatches(ResolvedIntegration)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.BatchID == item.BatchID);
+            if (batch != null && IsBatchPostedToAe(batch.AERequestStatus))
+            {
+                SetErrorMessage("Cannot include items after the batch has been posted to Aggie Enterprise.");
+                return Redirect(ExcludedUrl(item.BatchID));
+            }
+
+            item.DoNotInclude = false;
+            await _dbResolver.SaveChangesAsync(ResolvedIntegration);
+            await UpdateBatchStatusAsync(item.BatchID);
+
+            SetSuccessMessage("Item included in this batch again.");
+            return Redirect(ExcludedUrl(item.BatchID));
+        }
+
         // GET: Download Items Excel
         public async Task<IActionResult> OnGetDownloadItemsAsync()
         {
             if (!SelectedBatchId.HasValue)
                 return RedirectToPage(new { Integration });
 
+            NormalizeItemFilters();
+
             var feedItems = _dbResolver.GetFeedItems(ResolvedIntegration);
             var q = feedItems.Where(i => i.BatchID == SelectedBatchId.Value);
 
-            if (ShowInvalidOnly)
+            if (ShowExcludedOnly)
+            {
+                q = q.Where(i => i.DoNotInclude);
+            }
+            else if (ShowInvalidOnly)
             {
                 q = q.Where(i =>
-                    (i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid");
+                    !i.DoNotInclude &&
+                    ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid"));
             }
 
             var items = await q
@@ -131,7 +220,8 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             ws.Cell(row, 13).Value = "TestCode";
             ws.Cell(row, 14).Value = "TestName";
             ws.Cell(row, 15).Value = "UnprocessedCOAString";
-            ws.Cell(row, 16).Value = "AE_Details";
+            ws.Cell(row, 16).Value = "DoNotInclude";
+            ws.Cell(row, 17).Value = "AE_Details";
             row++;
 
             foreach (var i in items)
@@ -155,7 +245,8 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 ws.Cell(row, 13).Value = i.TestCode;
                 ws.Cell(row, 14).Value = i.TestName;
                 ws.Cell(row, 15).Value = i.UnprocessedCOAString ?? "";
-                ws.Cell(row, 16).Value = aeDetails;
+                ws.Cell(row, 16).Value = i.DoNotInclude;
+                ws.Cell(row, 17).Value = aeDetails;
 
                 row++;
             }
@@ -166,7 +257,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             wb.SaveAs(stream);
             stream.Position = 0;
 
-            var suffix = ShowInvalidOnly ? "_INVALID_ONLY" : "";
+            var suffix = ShowExcludedOnly ? "_EXCLUDED_ONLY" : ShowInvalidOnly ? "_INVALID_ONLY" : "";
             var fileName = $"AE_Feed_Items_{ResolvedIntegration}_{SelectedBatchId.Value}{suffix}_{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx";
 
             return File(stream.ToArray(),
@@ -395,6 +486,8 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             AeDetailError = null;
             AeDetailInputCoa = null;
 
+            NormalizeItemFilters();
+
             var feedBatches = _dbResolver.GetFeedBatches(ResolvedIntegration);
             var feedItems = _dbResolver.GetFeedItems(ResolvedIntegration);
 
@@ -442,6 +535,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 var bIds = batchIdsQuery.OrderByDescending(b => b.AETransactionDate ?? b.DateSent).ThenByDescending(b => b.BatchID).Take(200).Select(b => b.BatchID);
                 InvalidItemsCount = await feedItems
                     .Where(i => bIds.Contains(i.BatchID) &&
+                        !i.DoNotInclude &&
                         ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid"))
                     .CountAsync();
             }
@@ -457,14 +551,21 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             {
                 var selectedBatch = Batches.FirstOrDefault(b => b.BatchID == SelectedBatchId.Value);
                 SelectedBatchJournalName = selectedBatch?.AEJournalName;
+                CanIncludeExcludedItems = await IsOperatorAsync()
+                    && !IsBatchPostedToAe(selectedBatch?.AERequestStatus);
 
                 var itemsQuery = feedItems
                     .Where(i => i.BatchID == SelectedBatchId.Value);
 
-                if (ShowInvalidOnly)
+                if (ShowExcludedOnly)
+                {
+                    itemsQuery = itemsQuery.Where(i => i.DoNotInclude);
+                }
+                else if (ShowInvalidOnly)
                 {
                     itemsQuery = itemsQuery.Where(i =>
-                        (i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid");
+                        !i.DoNotInclude &&
+                        ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid"));
                 }
 
                 Items = await itemsQuery
@@ -500,6 +601,45 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
 
                 if (AeDetailData == null && string.IsNullOrWhiteSpace(AeDetailError))
                     AeDetailError = "AE returned no data.";
+            }
+        }
+
+        private async Task UpdateBatchStatusAsync(Guid batchId)
+        {
+            var feedItems = _dbResolver.GetFeedItems(ResolvedIntegration);
+
+            // Keep Send-to-AE Batch Total / dropdown in sync with included lines only
+            var batchTotal = await feedItems
+                .Where(i => i.BatchID == batchId && !i.DoNotInclude)
+                .SumAsync(i => (decimal?)i.TotalCharge) ?? 0m;
+
+            await _dbResolver.ExecuteSqlAsync(ResolvedIntegration,
+                $"UPDATE C_AE_Feed_Batch SET batchTotal = {batchTotal} WHERE batchID = {batchId}");
+
+            // Match StagingCoaValidationService: reverse of exclude (Ready ↔ Needs Review)
+            var hasCoaIssue = await feedItems.AnyAsync(i =>
+                i.BatchID == batchId &&
+                !i.DoNotInclude &&
+                i.DebitStringValid != null &&
+                i.CreditStringValid != null &&
+                (i.DebitStringValid != "Valid" || i.CreditStringValid != "Valid"));
+
+            if (hasCoaIssue)
+            {
+                await _dbResolver.ExecuteSqlAsync(ResolvedIntegration,
+                    $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {"Needs Review"} WHERE batchID = {batchId}");
+                return;
+            }
+
+            var hasPending = await feedItems.AnyAsync(i =>
+                i.BatchID == batchId &&
+                !i.DoNotInclude &&
+                (i.DebitStringValid == null || i.CreditStringValid == null));
+
+            if (!hasPending)
+            {
+                await _dbResolver.ExecuteSqlAsync(ResolvedIntegration,
+                    $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {"Ready"} WHERE batchID = {batchId}");
             }
         }
     }

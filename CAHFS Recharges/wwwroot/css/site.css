@@ -63,8 +63,6 @@
 /*  Base HTML & Body  */
 html {
   font-size: 14px;
-  position: relative;
-  min-height: 100%;
 }
 
 @media (min-width: 768px) {
@@ -74,7 +72,6 @@ html {
 }
 
 body {
-  margin-bottom: 60px;
   font-family: "Proxima Nova", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-weight: var(--font-weight-normal, 400);
   line-height: var(--line-height-normal, 1.5);
@@ -83,6 +80,15 @@ body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   /* Allow reflow at 200% zoom; avoid overflow-x: hidden */
+}
+
+/* Footer — normal document flow (do not use body margin-bottom / absolute footer) */
+.caei-footer {
+  background-color: #f8f9fa;
+  border-top: 1px solid #dee2e6;
+  padding: 0.75rem 0;
+  font-size: 0.85rem;
+  color: #6c757d;
 }
 
 /*  Typography Base Styles  */
@@ -1329,25 +1335,49 @@ small, .text-sm {
   grid-template-columns: repeat(2, 1fr);
   gap: 0.5rem;
   margin-bottom: 1rem;
-  max-width: 800px;
+  max-width: 960px;
 }
 
 @media (min-width: 768px) {
   .staging-stats-grid {
     grid-template-columns: repeat(4, 1fr);
   }
+  .staging-stats-grid.staging-stats-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 320px;
+  }
+  .staging-stats-grid.staging-stats-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 480px;
+  }
   .staging-stats-grid.staging-stats-grid-5 {
     grid-template-columns: repeat(5, 1fr);
     max-width: 800px;
   }
-  .staging-stats-grid.staging-stats-grid-5 .staging-stat-card {
+  .staging-stats-grid.staging-stats-grid-6 {
+    grid-template-columns: repeat(6, 1fr);
+    max-width: 960px;
+  }
+  .staging-stats-grid.staging-stats-grid-2 .staging-stat-card,
+  .staging-stats-grid.staging-stats-grid-3 .staging-stat-card,
+  .staging-stats-grid.staging-stats-grid-5 .staging-stat-card,
+  .staging-stats-grid.staging-stats-grid-6 .staging-stat-card {
     padding: 0.4rem 0.5rem;
   }
-  .staging-stats-grid.staging-stats-grid-5 .staging-stat-value {
+  .staging-stats-grid.staging-stats-grid-2 .staging-stat-value,
+  .staging-stats-grid.staging-stats-grid-3 .staging-stat-value,
+  .staging-stats-grid.staging-stats-grid-5 .staging-stat-value,
+  .staging-stats-grid.staging-stats-grid-6 .staging-stat-value {
     font-size: 1.1rem;
   }
+  .staging-stats-grid.staging-stats-grid-2 .staging-stat-label,
+  .staging-stats-grid.staging-stats-grid-2 .staging-stat-action,
+  .staging-stats-grid.staging-stats-grid-3 .staging-stat-label,
+  .staging-stats-grid.staging-stats-grid-3 .staging-stat-action,
   .staging-stats-grid.staging-stats-grid-5 .staging-stat-label,
-  .staging-stats-grid.staging-stats-grid-5 .staging-stat-action {
+  .staging-stats-grid.staging-stats-grid-5 .staging-stat-action,
+  .staging-stats-grid.staging-stats-grid-6 .staging-stat-label,
+  .staging-stats-grid.staging-stats-grid-6 .staging-stat-action {
     font-size: 0.75rem;
   }
 }
@@ -1374,6 +1404,11 @@ small, .text-sm {
   border-color: var(--gray-300, #d1d5db);
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
   text-decoration: none;
+}
+
+.staging-stat-card.staging-stat-clickable[aria-current="true"] {
+  border-color: var(--ucd-blue, #022851);
+  box-shadow: 0 0 0 1px var(--ucd-blue, #022851);
 }
 
 .staging-stat-card.has-warning {
@@ -1624,7 +1659,17 @@ main thead.sticky-top {
 
 .caei-scroll-y-400 {
   max-height: 400px;
-  overflow-y: auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* Flex children (Bootstrap .card) default min-height:auto and can ignore max-height */
+  min-height: 0;
+}
+
+/* Direct scroll host inside cards — keep page height from growing with row content */
+.card > .caei-scroll-y-400 {
+  height: 400px;
+  max-height: 400px;
+  flex-shrink: 0;
 }
 
 .caei-scroll-y-500 {

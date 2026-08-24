@@ -7,6 +7,14 @@
     <RootNamespace>CAHFS_Recharges</RootNamespace>
   </PropertyGroup>
 
+  <!-- Nested console project must not be compiled into the web app (avoids duplicate AssemblyInfo / TFM attrs). -->
+  <ItemGroup>
+    <Compile Remove="LockboxCashReceiptPoster\**" />
+    <Content Remove="LockboxCashReceiptPoster\**" />
+    <EmbeddedResource Remove="LockboxCashReceiptPoster\**" />
+    <None Remove="LockboxCashReceiptPoster\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Remove=".graphqlrc.json" />
   </ItemGroup>

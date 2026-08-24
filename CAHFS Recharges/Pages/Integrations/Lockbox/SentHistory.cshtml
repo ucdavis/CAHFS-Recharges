@@ -3,13 +3,147 @@
 @{
     ViewData["Title"] = "Sent History";
     var integration = ViewData["Integration"] as string ?? "CAHFS";
+    var poBox = integration.Equals("EQUINE", StringComparison.OrdinalIgnoreCase) ? "744835" : "744833";
+    var pathBase = HttpContext.Request.PathBase;
+    var summary = Model.Summary;
 }
 
-<div class="mb-4">
-    <h1 class="h3 mb-1">Sent History</h1>
-    <p class="text-muted mb-0">Lockbox payments posted to Great Plains (@integration).</p>
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h1 class="h3 mb-1">Sent History</h1>
+        <p class="text-muted mb-0">Lockbox payments posted to Great Plains — PO Box @poBox (@integration)</p>
+    </div>
 </div>
 
-<div class="alert alert-info" role="status">
-    Sent history is coming soon. This will list completed GP payment posts from lockbox staging.
+<div class="staging-stats-grid staging-stats-grid-3 mb-4">
+    <div class="staging-stat-card @(summary.PostedCount > 0 ? "has-success" : "")">
+        <span class="staging-stat-value @(summary.PostedCount > 0 ? "text-success" : "")">@summary.PostedCount</span>
+        <div class="staging-stat-label">Posted</div>
+        <div class="staging-stat-action text-muted small">In GP</div>
+    </div>
+    <div class="staging-stat-card @(summary.FailedCount > 0 ? "has-warning" : "")">
+        <span class="staging-stat-value @(summary.FailedCount > 0 ? "text-danger" : "")">@summary.FailedCount</span>
+        <div class="staging-stat-label">Failed</div>
+        <div class="staging-stat-action text-muted small">Needs review</div>
+    </div>
+    <div class="staging-stat-card">
+        <span class="staging-stat-value">@summary.PostedAmount.ToString("C")</span>
+        <div class="staging-stat-label">Posted amount</div>
+        <div class="staging-stat-action text-muted small">Successful only</div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Filters</h2>
+        <form method="get">
+            <input type="hidden" name="integration" value="@integration" />
+            <div class="row g-3 mb-3">
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="FromDate" class="form-label">From posted date</label>
+                    <input asp-for="FromDate" class="form-control" type="date" />
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="ToDate" class="form-label">To posted date</label>
+                    <input asp-for="ToDate" class="form-control" type="date" />
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="Status" class="form-label">Post status</label>
+                    <select asp-for="Status" class="form-select">
+                        <option value="">All</option>
+                        <option value="Posted">Posted</option>
+                        <option value="Failed">Failed</option>
+                    </select>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="BillingId" class="form-label">Billing ID</label>
+                    <input asp-for="BillingId" class="form-control" placeholder="Customer #" />
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="DocumentNumber" class="form-label">GP document #</label>
+                    <input asp-for="DocumentNumber" class="form-control" placeholder="PYMNT..." />
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Apply filters</button>
+                <a href="@(pathBase)/Integrations/@integration/Lockbox/SentHistory" class="btn btn-outline-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body border-bottom py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+            <h2 class="h5 mb-1">Post history</h2>
+            <p class="text-muted small mb-0">
+                Showing @Model.Rows.Count row(s) (max 1,000) for lockbox <strong>@poBox</strong>.
+            </p>
+        </div>
+        <form method="post" asp-page-handler="Export" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="integration" value="@integration" />
+            <input type="hidden" name="FromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="ToDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Status" value="@Model.Status" />
+            <input type="hidden" name="BillingId" value="@Model.BillingId" />
+            <input type="hidden" name="DocumentNumber" value="@Model.DocumentNumber" />
+            <button type="submit" class="btn btn-outline-secondary btn-sm" @(Model.Rows.Count == 0 ? "disabled" : null)>
+                Export History
+            </button>
+        </form>
+    </div>
+    @if (Model.Rows.Count == 0)
+    {
+        <div class="card-body text-center py-5">
+            <p class="text-muted mb-2">No posted or failed lockbox payments for the selected filters.</p>
+            <a href="@(pathBase)/Integrations/@integration/Lockbox/SentHistory" class="btn btn-outline-primary btn-sm">Clear filters</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive caei-scroll-y-400">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="sticky-top bg-white">
+                    <tr>
+                        <th scope="col">Posted at</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Billing ID</th>
+                        <th scope="col">Check #</th>
+                        <th scope="col" class="text-end">Amount</th>
+                        <th scope="col">Deposit</th>
+                        <th scope="col">Batch</th>
+                        <th scope="col">File</th>
+                        <th scope="col">GP doc #</th>
+                        <th scope="col">Post error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Rows)
+                    {
+                        var statusClass = row.PostStatus switch
+                        {
+                            "Posted" => "bg-success",
+                            "Failed" => "bg-danger",
+                            _ => "bg-secondary"
+                        };
+                        <tr>
+                            <td>@(row.PostedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                            <td>
+                                <span class="badge @statusClass">@row.PostStatus</span>
+                            </td>
+                            <td>@(row.BillingId ?? "—")</td>
+                            <td>@row.CheckNumber</td>
+                            <td class="text-end">@row.CheckAmount.ToString("N2")</td>
+                            <td>@row.DepositDate.ToString("yyyy-MM-dd")</td>
+                            <td>@row.BatchNumber</td>
+                            <td class="small">@row.FileName</td>
+                            <td class="font-mono small">@(row.ExternalDocNumber ?? "—")</td>
+                            <td class="small text-muted">@(row.PostError ?? "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 </div>

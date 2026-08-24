@@ -12,11 +12,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CAHFS_Recharges.Pages.Integrations.Staging
 {
-    /// <summary>
     /// Unified Manual Send to AE page for both CAHFS and EQUINE integrations.
     /// Uses route parameter {integration} to determine which database to use.
     /// Route: /Integrations/{integration}/Staging/SendToAggieEnterprise
-    /// </summary>
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class SendToAggieEnterpriseModel : IntegrationPageModel
     {
@@ -238,6 +236,47 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 .AsNoTracking()
                 .ToListAsync();
 
+            // BatchTotal on the row can be stale after exclude/include; show included-lines total.
+            // Use IQueryable subquery (not a local List) to avoid SQL Server OPENJSON/WITH syntax errors.
+            if (Batches.Count > 0)
+            {
+                var batchIdSubquery = feedBatches.AsQueryable();
+                if (FromDate.HasValue)
+                {
+                    var from = FromDate.Value.Date;
+                    batchIdSubquery = batchIdSubquery.Where(b => (b.AETransactionDate ?? b.DateSent) >= from);
+                }
+                if (ToDate.HasValue)
+                {
+                    var to = ToDate.Value.Date.AddDays(1);
+                    batchIdSubquery = batchIdSubquery.Where(b => (b.AETransactionDate ?? b.DateSent) < to);
+                }
+                batchIdSubquery = batchIdSubquery.Where(b =>
+                    b.AERequestStatus != null && b.AERequestStatus.Trim() == "Ready");
+                if (!string.IsNullOrWhiteSpace(JournalName))
+                {
+                    var j = JournalName.Trim();
+                    batchIdSubquery = batchIdSubquery.Where(b => b.AEJournalName.Contains(j));
+                }
+
+                var batchIdsQuery = batchIdSubquery
+                    .OrderByDescending(b => b.AETransactionDate ?? b.DateSent)
+                    .ThenByDescending(b => b.BatchID)
+                    .Take(200)
+                    .Select(b => b.BatchID);
+
+                var includedTotals = await feedItems
+                    .AsNoTracking()
+                    .Where(i => batchIdsQuery.Contains(i.BatchID) && !i.DoNotInclude)
+                    .GroupBy(i => i.BatchID)
+                    .Select(g => new { BatchId = g.Key, Total = g.Sum(x => x.TotalCharge) })
+                    .ToListAsync();
+
+                var totalByBatch = includedTotals.ToDictionary(x => x.BatchId, x => (decimal?)x.Total);
+                foreach (var b in Batches)
+                    b.BatchTotal = totalByBatch.TryGetValue(b.BatchID, out var t) ? t : 0m;
+            }
+
             // Count successfully sent batches (same logic as Sent History "Successful")
             SuccessfullySentCount = await feedBatches
                 .AsNoTracking()
@@ -287,9 +326,21 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
 
             if (SelectedBatchId.HasValue)
             {
-                SelectedBatch = await feedBatches
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(b => b.BatchID == SelectedBatchId.Value);
+                SelectedBatch = Batches.FirstOrDefault(b => b.BatchID == SelectedBatchId.Value);
+                if (SelectedBatch == null)
+                {
+                    SelectedBatch = await feedBatches
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(b => b.BatchID == SelectedBatchId.Value);
+
+                    if (SelectedBatch != null)
+                    {
+                        SelectedBatch.BatchTotal = await feedItems
+                            .AsNoTracking()
+                            .Where(i => i.BatchID == SelectedBatch.BatchID && !i.DoNotInclude)
+                            .SumAsync(i => (decimal?)i.TotalCharge) ?? 0m;
+                    }
+                }
 
                 if (SelectedBatch != null)
                 {

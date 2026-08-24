@@ -3,13 +3,214 @@
 @{
     ViewData["Title"] = "Check Validations";
     var integration = ViewData["Integration"] as string ?? "CAHFS";
+    var poBox = integration.Equals("EQUINE", StringComparison.OrdinalIgnoreCase) ? "744835" : "744833";
+    var pathBase = HttpContext.Request.PathBase;
+    var isOperator = ViewData["IsOperator"] as bool? ?? false;
+    var summary = Model.Summary;
+    var statusFilter = Model.Status ?? "";
+    var invalidCustomerDisplayCount = summary.InvalidCustomerCount + summary.WarnCount;
+
+    string FilterUrl(string? status)
+    {
+        var qs = new List<string> { $"integration={Uri.EscapeDataString(integration)}" };
+        if (Model.FromDate.HasValue)
+            qs.Add($"FromDate={Model.FromDate:yyyy-MM-dd}");
+        if (Model.ToDate.HasValue)
+            qs.Add($"ToDate={Model.ToDate:yyyy-MM-dd}");
+        if (!string.IsNullOrWhiteSpace(Model.BillingId))
+            qs.Add($"BillingId={Uri.EscapeDataString(Model.BillingId)}");
+        if (!string.IsNullOrWhiteSpace(status))
+            qs.Add($"Status={Uri.EscapeDataString(status)}");
+        return $"{pathBase}/Integrations/{integration}/Lockbox/CheckValidations?{string.Join("&", qs)}";
+    }
 }
 
-<div class="mb-4">
-    <h1 class="h3 mb-1">Check Validations</h1>
-    <p class="text-muted mb-0">Review lockbox payment validation results before Great Plains posting (@integration).</p>
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h1 class="h3 mb-1">Check Validations</h1>
+        <p class="text-muted mb-0">
+            Review and correct lockbox payments that are not ready for Great Plains — PO Box @poBox (@integration)
+        </p>
+    </div>
 </div>
 
 <div class="alert alert-info" role="status">
-    Check validation workspace is coming soon. Use <strong>Lockbox Staging</strong> in the header to review parsed payments.
+    Fix Billing ID for invalid customers, then Save. A match in Great Plains sets status to Valid so the next poster run can post.
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @Model.SuccessMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>Error:</strong> @Model.ErrorMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="staging-stats-grid staging-stats-grid-2 mb-4">
+    <a href="@FilterUrl("INVALID_CUSTOMER")"
+       class="staging-stat-card staging-stat-clickable @(invalidCustomerDisplayCount > 0 || statusFilter == "INVALID_CUSTOMER" || statusFilter == "WARN" ? "has-warning" : "")"
+       aria-current="@(statusFilter == "INVALID_CUSTOMER" || statusFilter == "WARN" ? "true" : "false")"
+       aria-label="Invalid customer (@invalidCustomerDisplayCount). Filter invalid customer and warning rows.">
+        <span class="staging-stat-value @(invalidCustomerDisplayCount > 0 ? "text-danger" : "")">@invalidCustomerDisplayCount</span>
+        <div class="staging-stat-label">Invalid customer</div>
+        <div class="staging-stat-action text-muted small">Filter this status</div>
+    </a>
+    <a href="@FilterUrl("ERROR")"
+       class="staging-stat-card staging-stat-clickable @(summary.ErrorCount > 0 || statusFilter == "ERROR" ? "has-warning" : "")"
+       aria-current="@(statusFilter == "ERROR" ? "true" : "false")">
+        <span class="staging-stat-value @(summary.ErrorCount > 0 ? "text-danger" : "")">@summary.ErrorCount</span>
+        <div class="staging-stat-label">Errors</div>
+        <div class="staging-stat-action text-muted small">Filter this status</div>
+    </a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Filters</h2>
+        <form method="get">
+            <input type="hidden" name="integration" value="@integration" />
+            <div class="row g-3 mb-3">
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="FromDate" class="form-label">From deposit date</label>
+                    <input asp-for="FromDate" class="form-control" type="date" />
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="ToDate" class="form-label">To deposit date</label>
+                    <input asp-for="ToDate" class="form-control" type="date" />
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="Status" class="form-label">Validation status</label>
+                    <select asp-for="Status" class="form-select">
+                        <option value="">All exceptions</option>
+                        <option value="INVALID_CUSTOMER">Invalid customer</option>
+                        <option value="ERROR">Error</option>
+                    </select>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <label asp-for="BillingId" class="form-label">Billing ID</label>
+                    <input asp-for="BillingId" class="form-control" placeholder="Customer #" />
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Apply filters</button>
+                <a href="@(pathBase)/Integrations/@integration/Lockbox/CheckValidations" class="btn btn-outline-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3" style="display: block; overflow: hidden;">
+    <div class="card-body border-bottom py-3">
+        <h2 class="h5 mb-1">Exception queue</h2>
+        <p class="text-muted small mb-0">
+            Showing @Model.Rows.Count row(s) (max 1,000) for lockbox <strong>@poBox</strong>.
+            @if (!isOperator)
+            {
+                <span>View only — Operator access is required to correct Billing ID.</span>
+            }
+        </p>
+    </div>
+    @if (Model.Rows.Count == 0)
+    {
+        <div class="card-body text-center py-5">
+            <p class="text-muted mb-2">No exception rows for the selected filters.</p>
+            <a href="@(pathBase)/Integrations/@integration/Lockbox/CheckValidations" class="btn btn-outline-primary btn-sm">Clear filters</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive caei-scroll-y-400">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="sticky-top bg-white">
+                    <tr>
+                        <th scope="col">Issue</th>
+                        <th scope="col">Deposit</th>
+                        <th scope="col">Check #</th>
+                        <th scope="col" class="text-end">Amount</th>
+                        <th scope="col">Remitter</th>
+                        <th scope="col">Accession</th>
+                        <th scope="col" style="min-width: 12rem;">Billing ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Rows)
+                    {
+                        var statusClass = row.ValidationStatus switch
+                        {
+                            "VALID" => "bg-success",
+                            "WARN" => "bg-warning text-dark",
+                            "INVALID_CUSTOMER" => "bg-danger",
+                            "ERROR" => "bg-danger",
+                            _ => "bg-secondary"
+                        };
+                        var formId = $"billing-save-{row.StagingId}";
+                        <tr>
+                            <td>
+                                <div class="mb-1">
+                                    <span class="badge @statusClass">@row.StatusDisplayName</span>
+                                </div>
+                                <div class="fw-semibold">@row.IssueSummary</div>
+                                @if (!string.IsNullOrWhiteSpace(row.IssueAction))
+                                {
+                                    <div class="small text-muted mt-1">@row.IssueAction</div>
+                                }
+                            </td>
+                            <td>@row.DepositDate.ToString("yyyy-MM-dd")</td>
+                            <td>@row.CheckNumber</td>
+                            <td class="text-end">@row.CheckAmount.ToString("N2")</td>
+                            <td>@(string.IsNullOrWhiteSpace(row.RemitterName) ? "—" : row.RemitterName)</td>
+                            <td class="small">@(string.IsNullOrWhiteSpace(row.AccessionFull) ? "—" : row.AccessionFull)</td>
+                            @if (isOperator)
+                            {
+                                <td>
+                                    <div class="d-flex flex-column flex-md-row gap-2 align-items-stretch align-items-md-center">
+                                        <div class="flex-grow-1">
+                                            <label class="visually-hidden" for="billing-@row.StagingId">Billing ID for check @row.CheckNumber</label>
+                                            <input id="billing-@row.StagingId"
+                                                   form="@formId"
+                                                   name="EditedBillingId"
+                                                   class="form-control form-control-sm"
+                                                   value="@(row.BillingId ?? "")"
+                                                   maxlength="20"
+                                                   placeholder="GP customer #"
+                                                   autocomplete="off" />
+                                        </div>
+                                        <button form="@formId" type="submit" class="btn btn-primary btn-sm align-self-md-start">Save</button>
+                                    </div>
+                                </td>
+                            }
+                            else
+                            {
+                                <td>@(row.BillingId ?? "—")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @* Forms live outside the table so they cannot expand page height (Staging-style scroll containment). *@
+        @if (isOperator)
+        {
+            foreach (var row in Model.Rows)
+            {
+                var formId = $"billing-save-{row.StagingId}";
+                <form id="@formId" method="post" asp-page-handler="SaveBillingId" class="d-none" aria-hidden="true">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="integration" value="@integration" />
+                    <input type="hidden" name="FromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="ToDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="Status" value="@Model.Status" />
+                    <input type="hidden" name="BillingId" value="@Model.BillingId" />
+                    <input type="hidden" name="StagingId" value="@row.StagingId" />
+                </form>
+            }
+        }
+    }
 </div>

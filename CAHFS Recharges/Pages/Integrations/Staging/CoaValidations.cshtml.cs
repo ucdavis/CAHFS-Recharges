@@ -472,13 +472,28 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
         {
             var feedItems = _dbResolver.GetFeedItems(ResolvedIntegration);
 
-            var hasInvalid = await feedItems.AnyAsync(i =>
+            // Keep Send-to-AE Batch Total / dropdown in sync with included lines only
+            var batchTotal = await feedItems
+                .Where(i => i.BatchID == batchId && !i.DoNotInclude)
+                .SumAsync(i => (decimal?)i.TotalCharge) ?? 0m;
+
+            await _dbResolver.ExecuteSqlAsync(ResolvedIntegration,
+                $"UPDATE C_AE_Feed_Batch SET batchTotal = {batchTotal} WHERE batchID = {batchId}");
+
+            // Match StagingCoaValidationService / FeedReview include: Ready ↔ Needs Review
+            var hasCoaIssue = await feedItems.AnyAsync(i =>
                 i.BatchID == batchId &&
                 !i.DoNotInclude &&
-                ((i.DebitStringValid ?? "") != "Valid" || (i.CreditStringValid ?? "") != "Valid"));
+                i.DebitStringValid != null &&
+                i.CreditStringValid != null &&
+                (i.DebitStringValid != "Valid" || i.CreditStringValid != "Valid"));
 
-            if (hasInvalid)
+            if (hasCoaIssue)
+            {
+                await _dbResolver.ExecuteSqlAsync(ResolvedIntegration,
+                    $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {"Needs Review"} WHERE batchID = {batchId}");
                 return;
+            }
 
             var hasPending = await feedItems.AnyAsync(i =>
                 i.BatchID == batchId &&
@@ -487,9 +502,8 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
 
             if (!hasPending)
             {
-                var status = "Ready";
                 await _dbResolver.ExecuteSqlAsync(ResolvedIntegration,
-                    $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {status} WHERE batchID = {batchId}");
+                    $"UPDATE C_AE_Feed_Batch SET AERequestStatus = {"Ready"} WHERE batchID = {batchId}");
             }
         }
     }

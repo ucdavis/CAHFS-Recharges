@@ -2,9 +2,7 @@ namespace CAHFS_Recharges.Services.Lockbox
 {
     internal static class LockboxFileNameParser
     {
-        /// <summary>
         /// Parses business date from filenames like DATA_74483320250527*.
-        /// </summary>
         public static bool TryParseBusinessDate(string fileName, string fileNamePrefix, out DateOnly businessDate)
         {
             businessDate = default;

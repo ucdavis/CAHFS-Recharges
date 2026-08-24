@@ -23,6 +23,11 @@
     var selectedBatch = Model.SelectedBatchId.HasValue 
         ? Model.Batches?.FirstOrDefault(b => b.BatchID == Model.SelectedBatchId.Value) 
         : null;
+
+    var itemsFilterQs =
+        (Model.ShowExcludedOnly ? "&ShowExcludedOnly=true" : "") +
+        (Model.ShowInvalidOnly ? "&ShowInvalidOnly=true" : "");
+    var isOperator = ViewData["IsOperator"] as bool? == true;
 }
 
 @* ===== PAGE HEADER ===== *@
@@ -281,24 +286,41 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h5 class="mb-1">Items for @(Model.SelectedBatchJournalName ?? "Batch " + selectedBatch.BatchID)</h5>
-                    <p class="text-muted small mb-0">@Model.Items.Count() items</p>
+                    <p class="text-muted small mb-0" id="items-count">@Model.Items.Count() items</p>
                 </div>
-                <div class="d-flex gap-2">
-                    @if (!Model.ShowInvalidOnly)
+                <div class="d-flex gap-2 flex-wrap">
+                    @if (Model.ShowInvalidOnly)
+                    {
+                        <span class="badge bg-warning text-dark align-self-center">Showing COA issues only</span>
+                    }
+                    else if (!Model.ShowExcludedOnly)
                     {
                         <a class="btn btn-outline-warning btn-sm"
                            href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId&ShowInvalidOnly=true#items">
                             Show COA issues only
                         </a>
                     }
-                    else
+
+                    @if (Model.ShowExcludedOnly)
                     {
-                        <span class="badge bg-warning text-dark align-self-center">Showing COA issues only</span>
+                        <span class="badge bg-secondary align-self-center">Showing excluded items</span>
+                    }
+                    else if (!Model.ShowInvalidOnly)
+                    {
+                        <a class="btn btn-outline-secondary btn-sm"
+                           href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId&ShowExcludedOnly=true#items">
+                            Show Excluded items
+                        </a>
+                    }
+
+                    @if (Model.ShowInvalidOnly || Model.ShowExcludedOnly)
+                    {
                         <a class="btn btn-outline-secondary btn-sm"
                            href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId#items">
                             Show All
                         </a>
                     }
+
                     <a class="btn btn-outline-primary btn-sm"
                        asp-page-handler="DownloadItems"
                        asp-route-Integration="@integration"
@@ -307,12 +329,15 @@
                        asp-route-ToDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
                        asp-route-Status="@Model.Status"
                        asp-route-JournalName="@Model.JournalName"
-                       asp-route-ShowInvalidOnly="@Model.ShowInvalidOnly">
+                       asp-route-ShowInvalidOnly="@Model.ShowInvalidOnly"
+                       asp-route-ShowExcludedOnly="@Model.ShowExcludedOnly">
                         Download Items
                     </a>
                 </div>
             </div>
         </div>
+
+        <div id="items-ajax-msg" class="mx-3 mt-3" hidden></div>
         
         @* AE Details Panel *@
         @if (Model.AeDetailData != null || !string.IsNullOrWhiteSpace(Model.AeDetailError))
@@ -363,22 +388,36 @@
 
                 <div class="mt-2">
                     <a class="btn btn-sm btn-secondary"
-                       href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId@(Model.ShowInvalidOnly ? "&ShowInvalidOnly=true" : "")#items">
+                       href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId@(itemsFilterQs)#items">
                         Clear AE Details
                     </a>
                 </div>
             </div>
         }
         
+        <div id="items-body">
         @if (!Model.Items.Any())
         {
-            <div class="card-body text-center py-4">
-                <p class="text-muted mb-0">@(Model.ShowInvalidOnly ? "No lines with COA issues in this batch (both sides are Valid)." : "No items found in this batch.")</p>
+            <div class="card-body text-center py-4" id="items-empty">
+                <p class="text-muted mb-0">
+                    @if (Model.ShowExcludedOnly)
+                    {
+                        @:No excluded items in this batch.
+                    }
+                    else if (Model.ShowInvalidOnly)
+                    {
+                        @:No lines with COA issues in this batch (both sides are Valid, or issues were excluded).
+                    }
+                    else
+                    {
+                        @:No items found in this batch.
+                    }
+                </p>
             </div>
         }
         else
         {
-            <div class="table-responsive caei-scroll-y-500">
+            <div class="table-responsive caei-scroll-y-500" id="items-table-wrap">
                 <table class="table table-hover table-sm mb-0">
                     <thead class="sticky-top bg-white">
                         <tr>
@@ -398,9 +437,13 @@
                             <th scope="col">Test Name</th>
                             <th scope="col">Unprocessed COA (StarLIMS)</th>
                             <th scope="col">AE Details</th>
+                            @if (Model.ShowExcludedOnly)
+                            {
+                                <th scope="col">Actions</th>
+                            }
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="items-tbody">
                     @foreach (var i in Model.Items)
                     {
                         var debitStatus = (i.DebitStringValid ?? "").Trim();
@@ -408,8 +451,14 @@
                         var debitInvalid = debitStatus != "Valid";
                         var creditInvalid = creditStatus != "Valid";
 
-                        <tr>
-                            <td class="font-mono">@i.RecordID</td>
+                        <tr data-record-id="@i.RecordID">
+                            <td class="font-mono">
+                                @i.RecordID
+                                @if (i.DoNotInclude && !Model.ShowExcludedOnly)
+                                {
+                                    <span class="badge bg-secondary ms-1">Excluded</span>
+                                }
+                            </td>
                             <td>@i.OrignalDocNumber</td>
                             <td class="font-mono small">@i.DebitChartString</td>
                             <td class="font-mono small">@i.CreditChartString</td>
@@ -442,14 +491,14 @@
                                 <div class="mt-1 small">
                                     @if (debitInvalid && !string.IsNullOrWhiteSpace(i.DebitChartString))
                                     {
-                                        <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId@(Model.ShowInvalidOnly ? "&ShowInvalidOnly=true" : "")&DetailRecordId=@i.RecordID&DetailSide=D#items">
+                                        <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId@(itemsFilterQs)&DetailRecordId=@i.RecordID&DetailSide=D#items">
                                             Detail Debit
                                         </a>
                                     }
                                     @if (creditInvalid && !string.IsNullOrWhiteSpace(i.CreditChartString))
                                     {
                                         if (debitInvalid) { <span> | </span> }
-                                        <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId@(Model.ShowInvalidOnly ? "&ShowInvalidOnly=true" : "")&DetailRecordId=@i.RecordID&DetailSide=C#items">
+                                        <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview?FromDate=@(Model.FromDate?.ToString("yyyy-MM-dd"))&ToDate=@(Model.ToDate?.ToString("yyyy-MM-dd"))&Status=@Model.Status&JournalName=@Model.JournalName&SelectedBatchId=@Model.SelectedBatchId@(itemsFilterQs)&DetailRecordId=@i.RecordID&DetailSide=C#items">
                                             Detail Credit
                                         </a>
                                     }
@@ -459,12 +508,41 @@
                                     <span class="text-muted">-</span>
                                 }
                             </td>
+                            @if (Model.ShowExcludedOnly)
+                            {
+                                <td>
+                                    @if (Model.CanIncludeExcludedItems)
+                                    {
+                                        <form method="post" asp-page-handler="IncludeItem" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="recordId" value="@i.RecordID" />
+                                            <input type="hidden" name="Integration" value="@integration" />
+                                            <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
+                                            <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+                                            <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+                                            <input type="hidden" name="Status" value="@Model.Status" />
+                                            <input type="hidden" name="JournalName" value="@Model.JournalName" />
+                                            <input type="hidden" name="ShowExcludedOnly" value="true" />
+                                            <button type="submit" class="btn btn-primary btn-sm">Include in batch</button>
+                                        </form>
+                                    }
+                                    else if (!isOperator)
+                                    {
+                                        <span class="text-muted small">Operator role required to include.</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">Cannot include after batch is posted to AE.</span>
+                                    }
+                                </td>
+                            }
                         </tr>
                     }
                     </tbody>
                 </table>
             </div>
         }
+        </div>
     </div>
 }
 else if (Model.Batches.Any())
@@ -477,5 +555,5 @@ else if (Model.Batches.Any())
 }
 
 @section Scripts {
-    <script src="~/js/feed-review-scroll.js"></script>
+    <script src="~/js/feed-review-scroll.js" asp-append-version="true"></script>
 }

@@ -7,6 +7,7 @@ namespace CAHFS_Recharges.Models.Lockbox
         public int WarnCount { get; set; }
         public int ErrorCount { get; set; }
         public int PendingCount { get; set; }
+        public int InvalidCustomerCount { get; set; }
         public decimal TotalCheckAmount { get; set; }
     }
 }

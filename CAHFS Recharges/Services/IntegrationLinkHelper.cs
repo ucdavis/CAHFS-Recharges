@@ -59,10 +59,23 @@ namespace CAHFS_Recharges.Services
             return $"/Integrations/{v}/Lockbox/SentHistory";
         }
 
+        public static string GetHiwuFilesPage(IntegrationType? integration)
+        {
+            return "/Integrations/EQUINE/Hiwu/Files";
+        }
+
+        public static string GetHiwuFileDetailPage(Guid fileId)
+        {
+            return $"/Integrations/EQUINE/Hiwu/Files/Detail?id={fileId:D}";
+        }
+
         public static string GetDefaultLandingPage(IntegrationType integration, ProductFamily family) =>
-            family == ProductFamily.Lockbox
-                ? GetLockboxFilesPage(integration)
-                : GetStagingDataPage(integration);
+            family switch
+            {
+                ProductFamily.Lockbox => GetLockboxFilesPage(integration),
+                ProductFamily.Hiwu => GetHiwuFilesPage(IntegrationType.EQUINE),
+                _ => GetStagingDataPage(integration)
+            };
 
         /// Validates that the integration string is valid (CAHFS or EQUINE).
         public static IntegrationType? ValidateIntegration(string? integration)

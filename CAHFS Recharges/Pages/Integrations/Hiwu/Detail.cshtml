@@ -1,0 +1,130 @@
+@page "/Integrations/{integration}/Hiwu/Files/Detail"
+@model CAHFS_Recharges.Pages.Integrations.Hiwu.DetailModel
+@using CAHFS_Recharges.Hiwu
+@{
+    ViewData["Title"] = "HIWU manifest file";
+    var pathBase = HttpContext.Request.PathBase;
+    var file = Model.Manifest;
+}
+
+<div class="mb-4">
+    <p class="mb-2"><a href="@(pathBase)/Integrations/EQUINE/Hiwu/Files">Back to manifest files</a></p>
+    <h1 class="h3 mb-1">HIWU manifest file</h1>
+    <p class="text-muted mb-0">EQUINE. The page shows the fields. It does not show the raw XML.</p>
+</div>
+
+@if (file == null)
+{
+    <div class="alert alert-warning" role="alert">This file was not found.</div>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h2 class="h5 mb-3">@file.RemoteFileName</h2>
+            <p class="mb-1">Downloaded @DetailModel.ToPacific(file.ReceivedUtc).ToString("yyyy-MM-dd HH:mm") Pacific</p>
+            <p class="mb-3 d-inline-flex align-items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                Status: @HiwuParseStatus.Label(file.ParseStatus)
+            </p>
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary" href="@(pathBase)/Integrations/EQUINE/Hiwu/Files/Detail?id=@file.FileId&handler=DownloadXml">Download raw XML</a>
+                @if (Model.CanDownloadCsv)
+                {
+                    <a class="btn btn-primary" href="@(pathBase)/Integrations/EQUINE/Hiwu/Files/Detail?id=@file.FileId&handler=DownloadCsv">Download HIWU CSV</a>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (file.ParseStatus == HiwuParseStatus.ParseError)
+    {
+        <div class="alert alert-warning" role="alert">
+            <h2 class="h5">This file was kept, and it did not pass the v1.8 schema.</h2>
+            <p class="mb-0">@(string.IsNullOrWhiteSpace(file.ParseError) ? "No validation message was stored." : file.ParseError)</p>
+        </div>
+    }
+    else if (Model.Document == null)
+    {
+        <div class="alert alert-warning" role="alert">The stored file could not be read as a testMission document.</div>
+    }
+    else if (file.IsAmendment && Model.OriginalMissing)
+    {
+        <div class="alert alert-warning" role="alert">
+            <h2 class="h5">The original file has not been received.</h2>
+            <p class="mb-0">The amendment is stored. There is no original to compare.</p>
+        </div>
+        @await Html.PartialAsync("_MissionAndSamples", Model)
+    }
+    else if (file.IsAmendment && Model.OriginalDocument != null)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Mission changes</h2>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Field</th>
+                                <th scope="col">Original</th>
+                                <th scope="col">Amendment</th>
+                                <th scope="col">Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.MissionCompare)
+                            {
+                                <tr>
+                                    <td>@row.Field</td>
+                                    <td>@(string.IsNullOrEmpty(row.Original) ? "—" : row.Original)</td>
+                                    <td>@(string.IsNullOrEmpty(row.Amendment) ? "—" : row.Amendment)</td>
+                                    <td>@(row.Changed ? "Changed" : "")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <h2 class="h5 mb-3">Samples in this amendment</h2>
+        @foreach (var sample in Model.SampleCompare)
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h3 class="h6">Sample @sample.SampleId</h3>
+                    @if (sample.MissingOnOriginal)
+                    {
+                        <p>This sample is not on the original file.</p>
+                    }
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Field</th>
+                                    <th scope="col">Original</th>
+                                    <th scope="col">Amendment</th>
+                                    <th scope="col">Result</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in sample.Fields)
+                                {
+                                    <tr>
+                                        <td>@row.Field</td>
+                                        <td>@(string.IsNullOrEmpty(row.Original) ? "—" : row.Original)</td>
+                                        <td>@(string.IsNullOrEmpty(row.Amendment) ? "—" : row.Amendment)</td>
+                                        <td>@(row.Changed ? "Changed" : "")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        @await Html.PartialAsync("_MissionAndSamples", Model)
+    }
+}

@@ -8,6 +8,7 @@ using CAHFS_Recharges.Models;
 using CAHFS_Recharges.Models.Options;
 using Microsoft.Extensions.Options;
 using CAHFS_Recharges.Services;
+using CAHFS_Recharges.Hiwu;
 using CAHFS_Recharges.Services.Lockbox;
 using Hangfire;
 using Hangfire.SqlServer;
@@ -175,6 +176,8 @@ try
     builder.Services.AddDbContext<StarLIMSContext>();
     builder.Services.AddDbContext<EquineFinancialContext>(options =>
         options.UseSqlServer(builder.Configuration.GetConnectionString("EquineFinancialDb")));
+    builder.Services.AddDbContext<CahfsIntegrationsContext>(options =>
+        options.UseSqlServer(builder.Configuration.GetConnectionString(CahfsIntegrationsContext.ConnectionStringName)));
 
     // StarLIMS write-back
     builder.Services.AddScoped<StarLimsCoaWritebackService>();
@@ -272,6 +275,21 @@ try
     builder.Services.AddScoped<LockboxSftpIngestService>();
     builder.Services.AddScoped<LockboxFileProcessService>();
     builder.Services.AddScoped<LockboxReadService>();
+
+    // HIWU SFTP connection from /{Environment}/Credentials/HIWU_SFTP. No host or secret in appsettings.
+    builder.Services.Configure<HiwuOptions>(builder.Configuration.GetSection(HiwuOptions.SectionName));
+    builder.Services.AddSingleton<IPostConfigureOptions<HiwuOptions>, HiwuOptionsConfiguration>();
+    builder.Services.AddSingleton<HiwuManifestParser>();
+    builder.Services.AddScoped<HiwuSftpClient>();
+    builder.Services.AddScoped<HiwuSftpIngestService>();
+    builder.Services.AddScoped<IHiwuFileRepository, HiwuFileRepository>();
+    builder.Services.AddScoped<HiwuReadService>();
+    builder.Services.AddHttpClient(HiwuCoflClient.HttpClientName, (sp, client) =>
+    {
+        var seconds = sp.GetRequiredService<IOptions<HiwuOptions>>().Value.ConnectTimeoutSeconds;
+        client.Timeout = TimeSpan.FromSeconds(seconds > 0 ? seconds : 30);
+    });
+    builder.Services.AddSingleton<HiwuCoflClient>();
 
     // Integration Context
     builder.Services.AddScoped<IIntegrationContextService, IntegrationContextService>();
@@ -421,6 +439,30 @@ try
                 job => job.ProcessLockboxFilesJob(),
                 lockboxProcessCron,
                 new RecurringJobOptions { TimeZone = lockboxTz });
+        }
+
+        var hiwuEnabled = builder.Configuration.GetValue<bool?>("Hiwu:Enabled") ?? false;
+        if (hiwuEnabled)
+        {
+            var hiwuCron = builder.Configuration.GetValue<string>("Hiwu:CronDaily") ?? "0 3 * * *";
+            var hiwuTzId = builder.Configuration.GetValue<string>("Hiwu:TimeZone");
+            TimeZoneInfo hiwuTz;
+            try
+            {
+                hiwuTz = !string.IsNullOrWhiteSpace(hiwuTzId)
+                    ? TimeZoneInfo.FindSystemTimeZoneById(hiwuTzId!)
+                    : tz;
+            }
+            catch
+            {
+                hiwuTz = tz;
+            }
+
+            RecurringJob.AddOrUpdate<HangfireJobs>(
+                "HiwuDailyIngest",
+                job => job.IngestHiwuFilesJob(),
+                hiwuCron,
+                new RecurringJobOptions { TimeZone = hiwuTz });
         }
     }
 

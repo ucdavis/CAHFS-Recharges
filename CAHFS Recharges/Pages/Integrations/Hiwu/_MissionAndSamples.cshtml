@@ -1,0 +1,62 @@
+@model CAHFS_Recharges.Pages.Integrations.Hiwu.DetailModel
+@using CAHFS_Recharges.Hiwu
+@{
+    var document = Model.Document!;
+}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Mission</h2>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Field</th>
+                        <th scope="col">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var field in HiwuManifestDocument.MissionFields)
+                    {
+                        if (!document.Mission.TryGetValue(field, out var value) || value.Length == 0)
+                            continue;
+                        <tr>
+                            <td>@field</td>
+                            <td>@HiwuManifestDocument.Display(field, value)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body border-bottom py-3">
+        <h2 class="h5 mb-0">Samples</h2>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    @foreach (var column in Model.SampleColumns)
+                    {
+                        <th scope="col">@column</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var sample in document.Samples)
+                {
+                    <tr>
+                        @foreach (var column in Model.SampleColumns)
+                        {
+                            sample.Fields.TryGetValue(column, out var value);
+                            <td>@HiwuManifestDocument.Display(column, value)</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

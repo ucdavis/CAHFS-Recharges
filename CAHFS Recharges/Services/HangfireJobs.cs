@@ -1,4 +1,5 @@
 using CAHFS_Recharges.Data;
+using CAHFS_Recharges.Hiwu;
 using CAHFS_Recharges.Models;
 using CAHFS_Recharges.Models.Options;
 using CAHFS_Recharges.Services.Lockbox;
@@ -35,7 +36,12 @@ namespace CAHFS_Recharges.Services
     ///    - Schedule: Daily at 3:15 AM (configurable via Lockbox:CronProcess)
     ///    - Purpose: Bulk-load C_LB_Raw_Line and EXEC C_LB_Process_File for Pending/Error files
     ///
-    /// 4. WednesdaySendLastWeek (SendLastWeekBatchesJob)
+    /// 4. HiwuDailyIngest (IngestHiwuFilesJob)
+    ///    - Schedule: Daily at 3:00 AM Pacific (Hiwu:CronDaily), only when Hiwu:Enabled is true
+    ///    - Purpose: Download HIWU manifest files from the HIWU SFTP folder into CAHFS-Integrations
+    ///    - Credentials: Credentials:HIWU_SFTP only
+    ///
+    /// 5. WednesdaySendLastWeek (SendLastWeekBatchesJob)
     ///    - Schedule: Wednesdays at 3:00 AM (configurable via Hangfire:CronWednesday)
     ///    - Purpose: Automatically sends Ready batches from the previous week to Aggie Enterprise
     ///    - Scope: Only sends batches where:
@@ -111,6 +117,24 @@ namespace CAHFS_Recharges.Services
             _logger.LogInformation("Hangfire: starting Lockbox parse/staging (post-ingest).");
             await process.ProcessPendingFilesAsync();
             _logger.LogInformation("Hangfire: Lockbox parse/staging finished (post-ingest).");
+        }
+
+        [DisableConcurrentExecution(60 * 60)]
+        public async Task IngestHiwuFilesJob()
+        {
+            using var scope = _services.CreateScope();
+            var options = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<HiwuOptions>>().Value;
+
+            if (!options.Enabled)
+            {
+                _logger.LogInformation("Hangfire: HIWU ingest skipped (Hiwu:Enabled=false).");
+                return;
+            }
+
+            var ingest = scope.ServiceProvider.GetRequiredService<HiwuSftpIngestService>();
+            _logger.LogInformation("Hangfire: starting HIWU SFTP ingest.");
+            await ingest.RunAsync();
+            _logger.LogInformation("Hangfire: HIWU SFTP ingest finished.");
         }
 
         [DisableConcurrentExecution(60 * 60)]

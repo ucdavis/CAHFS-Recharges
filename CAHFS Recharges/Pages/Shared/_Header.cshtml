@@ -30,11 +30,14 @@
 
     var productFamily = ViewData["ProductFamily"] as string ?? nameof(ProductFamily.AE);
     var isLockbox = productFamily.Equals(nameof(ProductFamily.Lockbox), StringComparison.OrdinalIgnoreCase);
+    var isHiwu = productFamily.Equals(nameof(ProductFamily.Hiwu), StringComparison.OrdinalIgnoreCase);
     var workspaceThemeClass = isLockbox ? $"{integrationThemeClass} theme-lockbox" : integrationThemeClass;
 
-    var workspaceTitle = isLockbox
-        ? $"{integrationDisplayName} → GP"
-        : $"{integrationDisplayName} → AE";
+    var workspaceTitle = isHiwu
+        ? $"{integrationDisplayName} → HIWU"
+        : isLockbox
+            ? $"{integrationDisplayName} → GP"
+            : $"{integrationDisplayName} → AE";
     var workspaceSubtitle = "Integration Workspace";
     
     // Navigation URLs
@@ -46,6 +49,7 @@
     var lockboxStagingPage = IntegrationLinkHelper.GetLockboxFilesPage(integrationType);
     var lockboxCheckPage = IntegrationLinkHelper.GetLockboxCheckValidationsPage(integrationType);
     var lockboxHistoryPage = IntegrationLinkHelper.GetLockboxSentHistoryPage(integrationType);
+    var hiwuFilesPage = IntegrationLinkHelper.GetHiwuFilesPage(integrationType);
     
     // Current page for active tab detection
     var currentPath = Context.Request.Path.Value?.ToLowerInvariant() ?? "";
@@ -56,6 +60,7 @@
     var isLockboxStaging = currentPath.Contains("lockboxfiles");
     var isLockboxCheck = currentPath.Contains("/lockbox/checkvalidations");
     var isLockboxHistory = currentPath.Contains("/lockbox/senthistory");
+    var isHiwuFiles = currentPath.Contains("/hiwu/files");
 }
 
 <header class="caei-header-wrapper @workspaceThemeClass">
@@ -123,7 +128,16 @@
                     
                     @* Navigation Tabs (Pill/Button Style) *@
                     <nav class="caei-nav" role="navigation" aria-label="Workspace navigation">
-                        @if (isLockbox)
+                        @if (isHiwu)
+                        {
+                            <a href="@(Context.Request.PathBase)@hiwuFilesPage" class="caei-nav-pill @(isHiwuFiles ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                Manifest files
+                            </a>
+                        }
+                        else if (isLockbox)
                         {
                             <a href="@(Context.Request.PathBase)@lockboxStagingPage" class="caei-nav-pill @(isLockboxStaging ? "active" : "")">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

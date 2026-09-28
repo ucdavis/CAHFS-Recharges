@@ -67,6 +67,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Content Remove="Docs\Hiwu\samples-v1.8.xsd" />
+	  <EmbeddedResource Include="Docs\Hiwu\samples-v1.8.xsd" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <GraphQL Include=".graphqlrc.json" />
 	</ItemGroup>
 

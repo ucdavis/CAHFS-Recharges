@@ -4,7 +4,8 @@ namespace CAHFS_Recharges.Models
     public enum ProductFamily
     {
         AE,
-        Lockbox
+        Lockbox,
+        Hiwu
     }
 
     public static class ProductFamilyExtensions
@@ -28,10 +29,20 @@ namespace CAHFS_Recharges.Models
                 return true;
             }
 
+            if (value.Equals(nameof(ProductFamily.Hiwu), StringComparison.OrdinalIgnoreCase))
+            {
+                result = ProductFamily.Hiwu;
+                return true;
+            }
+
             return false;
         }
 
-        public static string ToRouteString(this ProductFamily family) =>
-            family == ProductFamily.Lockbox ? "Lockbox" : "AE";
+        public static string ToRouteString(this ProductFamily family) => family switch
+        {
+            ProductFamily.Lockbox => "Lockbox",
+            ProductFamily.Hiwu => "Hiwu",
+            _ => "AE"
+        };
     }
 }

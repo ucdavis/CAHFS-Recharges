@@ -33,6 +33,9 @@ namespace CAHFS_Recharges.Pages
             if (!ProductFamilyExtensions.TryParse(family, out var productFamily))
                 productFamily = ProductFamily.AE;
 
+            if (productFamily == ProductFamily.Hiwu)
+                integrationType = IntegrationType.EQUINE;
+
             _integrationService.SetIntegrationCookie(HttpContext, integrationType);
             _integrationService.SetProductFamilyCookie(HttpContext, productFamily);
 

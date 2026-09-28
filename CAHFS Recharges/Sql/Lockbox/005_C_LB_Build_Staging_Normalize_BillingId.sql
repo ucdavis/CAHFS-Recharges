@@ -24,6 +24,11 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -- STEP 0: Remove prior staging rows for this file (keep Posted rows).
+    DELETE FROM dbo.C_LB_Payment_Staging
+    WHERE FileName = @FileName
+      AND ISNULL(PostStatus, '') <> 'Posted';
+
     -- STEP 1: INSERT staging rows (REC6 + REC4, and REC6 without REC4)
     INSERT INTO dbo.C_LB_Payment_Staging (
         FileName, Currency, TransactionType,
@@ -44,8 +49,8 @@ BEGIN
         LEFT(r6.FileName, 200),
         'USD',
         'Check',
-        RTRIM(b5.LockboxNumber),
-        b5.DepositDate,
+        COALESCE(NULLIF(RTRIM(b5.LockboxNumber), ''), NULLIF(RTRIM(bt.LockboxNumber), '')),
+        COALESCE(b5.DepositDate, bt.DepositDate),
         LEFT(RTRIM(r6.BatchNumber), 3),
         TRY_CAST(r6.ItemSeqNumber AS INT),
         r6.BankRouting,
@@ -67,6 +72,12 @@ BEGIN
     FROM dbo.C_LB_Payment_Detail r6
     LEFT JOIN dbo.C_LB_Batch_Header b5
            ON b5.FileName = r6.FileName
+          AND RIGHT(REPLICATE('0', 3) + LTRIM(RTRIM(ISNULL(b5.BatchNumber, ''))), 3)
+            = RIGHT(REPLICATE('0', 3) + LTRIM(RTRIM(ISNULL(r6.BatchNumber, ''))), 3)
+    LEFT JOIN dbo.C_LB_Batch_Trailer bt
+           ON bt.FileName = r6.FileName
+          AND RIGHT(REPLICATE('0', 3) + LTRIM(RTRIM(ISNULL(bt.BatchNumber, ''))), 3)
+            = RIGHT(REPLICATE('0', 3) + LTRIM(RTRIM(ISNULL(r6.BatchNumber, ''))), 3)
     INNER JOIN dbo.C_LB_Payment_Addenda r4
             ON r4.BatchNumber    = r6.BatchNumber
            AND r4.ItemSeqNumber = r6.ItemSeqNumber
@@ -90,8 +101,8 @@ BEGIN
         LEFT(r6.FileName, 200),
         'USD',
         'Check',
-        RTRIM(b5.LockboxNumber),
-        b5.DepositDate,
+        COALESCE(NULLIF(RTRIM(b5.LockboxNumber), ''), NULLIF(RTRIM(bt.LockboxNumber), '')),
+        COALESCE(b5.DepositDate, bt.DepositDate),
         LEFT(RTRIM(r6.BatchNumber), 3),
         TRY_CAST(r6.ItemSeqNumber AS INT),
         r6.BankRouting,
@@ -113,6 +124,12 @@ BEGIN
     FROM dbo.C_LB_Payment_Detail r6
     LEFT JOIN dbo.C_LB_Batch_Header b5
            ON b5.FileName = r6.FileName
+          AND RIGHT(REPLICATE('0', 3) + LTRIM(RTRIM(ISNULL(b5.BatchNumber, ''))), 3)
+            = RIGHT(REPLICATE('0', 3) + LTRIM(RTRIM(ISNULL(r6.BatchNumber, ''))), 3)
+    LEFT JOIN dbo.C_LB_Batch_Trailer bt
+           ON bt.FileName = r6.FileName
+          AND RIGHT(REPLICATE('0', 3) + LTRIM(RTRIM(ISNULL(bt.BatchNumber, ''))), 3)
+            = RIGHT(REPLICATE('0', 3) + LTRIM(RTRIM(ISNULL(r6.BatchNumber, ''))), 3)
     WHERE r6.FileName = @FileName
       AND NOT EXISTS (
             SELECT 1

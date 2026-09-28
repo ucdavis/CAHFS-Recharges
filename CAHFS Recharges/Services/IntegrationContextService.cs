@@ -40,6 +40,9 @@ namespace CAHFS_Recharges.Services
         public ProductFamily? ResolveProductFamily(HttpContext httpContext)
         {
             var path = httpContext.Request.Path.Value ?? string.Empty;
+            if (path.Contains("/Hiwu/", StringComparison.OrdinalIgnoreCase))
+                return ProductFamily.Hiwu;
+
             if (path.Contains("/Lockbox/", StringComparison.OrdinalIgnoreCase))
                 return ProductFamily.Lockbox;
 

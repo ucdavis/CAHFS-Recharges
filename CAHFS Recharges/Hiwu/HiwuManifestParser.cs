@@ -16,7 +16,7 @@ namespace CAHFS_Recharges.Hiwu
 
     public sealed class HiwuManifestParser
     {
-        private const string SchemaResourceName = "CAHFS_Recharges.Docs.Hiwu.samples-v1.8.xsd";
+        private const string SchemaResourceName = "CAHFS_Recharges.Hiwu.samples-v1.8.xsd";
         private readonly XmlSchemaSet _schema = LoadSchema();
         private readonly object _gate = new();
 

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="collectionPoints" final="restriction">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="POST RACE" />
+      <xs:enumeration value="TCO2" />
+      <xs:enumeration value="OOC" />
+      <xs:enumeration value="VETS LIST" />
+      <xs:enumeration value="CLAIMED" />
+      <xs:enumeration value="FATALITY/INJURY - POST RACE" />
+      <xs:enumeration value="FATALITY/INJURY - OTHER" />
+      <xs:enumeration value="POST WORK" />
+      <xs:enumeration value="CLEARANCE" />
+      <xs:enumeration value="OTHER" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="sampleTypes" final="restriction">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="BLOOD" />
+      <xs:enumeration value="URINE" />
+      <xs:enumeration value="HAIR" />
+      <xs:enumeration value="OTHER" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="genderTypes" final="restriction">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="COLT" />
+      <xs:enumeration value="GELDING" />
+      <xs:enumeration value="MARE" />
+      <xs:enumeration value="FILLY" />
+      <xs:enumeration value="STALLION" />
+      <xs:enumeration value="RIDGLING" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="hairTypes" final="restriction">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="MANE" />
+      <xs:enumeration value="TAIL" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="hairCollectionMethods" final="restriction">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="CUT" />
+      <xs:enumeration value="PULLED" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="testMission">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="location" type="xs:string" />
+        <xs:element name="trackingRef" type="xs:string" />
+        <xs:element name="courier" type="xs:string" />
+        <xs:element name="dateShipped" type="xs:date" />
+        <!--Optional field to record the container lock number -->
+        <xs:element name="containerLockNumber" type="xs:string" minOccurs="0" />
+        <!--Optional field to target certain analytes-->
+        <xs:element name="targetAnalytes" type="xs:string" minOccurs="0" />
+        <xs:element name="samples">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element maxOccurs="unbounded" name="sample">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="sampledDate" type="xs:date" />
+                    <xs:element name="collectionPoint" type="collectionPoints" />
+                    <xs:element name="age" type="xs:int" />
+                    <xs:element name="gender" type="genderTypes" />
+                    <xs:element name="lasix" type="xs:boolean" />
+                    <xs:element name="sampleType" type="sampleTypes" />
+                    <xs:element name="longTermStorage" type="xs:boolean" />
+                    <xs:element name="externalRef" type="xs:string" />
+                    <xs:element name="sampleId" type="xs:string" />
+                    <xs:element name="numberOfContainers" type="xs:int" />
+                    <xs:element name="optionalComment" type="xs:string" minOccurs="0" />
+                    <xs:element name="expeditedAnalysis" type="xs:boolean" minOccurs="0" />
+                    <!--For B Sample only-->
+                    <xs:element name="BSampleTestRequested" type="xs:boolean" minOccurs="0" />
+                    <xs:element name="BSampleTestNotes" type="xs:string" minOccurs="0" />
+                    <!--For TCO2 only-->
+                    <xs:element name="duplicateTCO2SampleRequested" type="xs:boolean" minOccurs="0" />
+                    <!--For HAIR only-->
+                    <xs:element name="hairType" type="hairTypes" minOccurs="0" />
+                    <xs:element name="hairCollectionMethod" type="hairCollectionMethods" minOccurs="0" />
+                    <xs:element name="segmentalAnalysisRequested" type="xs:boolean" minOccurs="0" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

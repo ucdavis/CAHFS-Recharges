@@ -18,8 +18,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="@(Context.Request.PathBase)/" />
     <title>@pageTitle - CAHFS Integration Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" />
+    <link rel="stylesheet" href="~/CAHFS Recharges.styles.css" asp-append-version="true" />
+    <script src="~/js/caei-density.js" asp-append-version="true" defer></script>
+    <script src="~/js/caei-keys.js" asp-append-version="true" defer></script>
 </head>
 <body class="@themeClass">
     <a href="#main-content" class="visually-hidden-focusable">Skip to main content</a>
@@ -39,6 +45,8 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/caei-filter.js" asp-append-version="true"></script>
+    <script src="~/js/caei-field-error.js" asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>

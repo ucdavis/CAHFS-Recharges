@@ -1,0 +1,19 @@
+@model CAHFS_Recharges.Models.CaeiEmptyState
+<div class="caei-empty" role="status">
+    <div class="caei-empty-mark" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+            <rect x="9" y="3" width="6" height="4" rx="1" stroke-width="1.75"/>
+            <path stroke-linecap="round" stroke-width="1.75" d="M9 12h6M9 16h4"/>
+        </svg>
+    </div>
+    <p class="caei-empty-title">@Model.Title</p>
+    @if (!string.IsNullOrWhiteSpace(Model.Message))
+    {
+        <p class="caei-empty-message">@Model.Message</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.ActionHref))
+    {
+        <a href="@Model.ActionHref" class="btn btn-primary" @(Model.UseFilterNav ? "data-caei-filter-nav" : null)>@Model.ActionText</a>
+    }
+</div>

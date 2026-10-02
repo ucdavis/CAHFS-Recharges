@@ -17,7 +17,7 @@ namespace CAHFS_Recharges.Pages
         private const string _strTicket = "ticket";
         private readonly IHttpClientFactory _clientFactory;
         private readonly CasSettings _settings;
-        private readonly List<string> _casAttributesToCapture = new() { "authenticationDate", "credentialType" };
+        private readonly List<string> _casAttributesToCapture = new() { "authenticationDate", "credentialType", "givenName" };
 
         public CasLoginModel(IHttpClientFactory clientFactory, IOptions<CasSettings> settingsOptions)
         {
@@ -73,7 +73,12 @@ namespace CAHFS_Recharges.Pages
                         {
                             foreach (var element in attributesNode.Elements(_ns + attributeName))
                             {
-                                claimsIdentity.AddClaim(new Claim(element.Name.LocalName, element.Value));
+                                if (string.IsNullOrWhiteSpace(element.Value))
+                                    continue;
+
+                                claimsIdentity.AddClaim(new Claim(element.Name.LocalName, element.Value.Trim()));
+                                if (attributeName.Equals("givenName", StringComparison.OrdinalIgnoreCase))
+                                    claimsIdentity.AddClaim(new Claim(ClaimTypes.GivenName, element.Value.Trim()));
                             }
                         }
                     }

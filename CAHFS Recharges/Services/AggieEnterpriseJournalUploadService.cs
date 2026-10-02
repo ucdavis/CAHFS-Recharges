@@ -251,8 +251,13 @@ namespace CAHFS_Recharges.Services
                         : $"AE returned no status data. GraphQL: {gqlErrorsText}",
                     batch.AEConsumerRequestID);
 
-            var statusText = data.RequestStatus.RequestStatus.ToString();
-            batch.AERequestStatus = string.IsNullOrWhiteSpace(statusText) ? "Unknown" : statusText;
+            var requestRaw = data.RequestStatus.RequestStatus.ToString();
+            var processingRaw = data.ProcessingResult?.Status;
+            batch.AERequestStatus = ResolveStoredStatus(
+                requestRaw,
+                processingRaw,
+                data.RequestStatus.ProcessedDateTime != null,
+                data.ValidationResults?.Valid);
 
             var validationErr = NormalizeErrorMessages(data.ValidationResults?.ErrorMessages);
             var processingErr = NormalizeErrorMessages(data.ProcessingResult?.ErrorMessages);
@@ -266,7 +271,9 @@ namespace CAHFS_Recharges.Services
 
             await _dbResolver.SaveChangesAsync(integration, ct);
 
-            return new StatusResult(true, $"AE Status: {batch.AERequestStatus}", batch.AEConsumerRequestID);
+            return new StatusResult(true,
+                $"AE Status: {batch.AERequestStatus} (request={requestRaw}, processing={processingRaw ?? "none"})",
+                batch.AEConsumerRequestID);
         }
 
         // Build Request (Header + Payload)
@@ -490,6 +497,52 @@ namespace CAHFS_Recharges.Services
 
             return baseText.Length <= 100 ? baseText : baseText.Substring(0, 100);
         }
+
+        /// <summary>
+        /// AE leaves requestStatus at PENDING while the journal is still queued, then COMPLETE / ERROR.
+        /// processingResult.status (SUCCESS, PROCESSED, ERROR) and processedDateTime are filled when Oracle finishes,
+        /// sometimes before requestStatus moves off PENDING. Store the short values the rest of the app already uses.
+        /// AERequestStatus is nvarchar(10).
+        /// </summary>
+        private static string ResolveStoredStatus(string? requestStatus, string? processingStatus, bool processed, bool? validationValid)
+        {
+            if (validationValid == false)
+                return "Error";
+
+            var request = NormalizeStatusToken(requestStatus);
+            var processing = NormalizeStatusToken(processingStatus);
+
+            if (IsErrorStatus(request) || IsErrorStatus(processing))
+                return "Error";
+
+            if (request == "VALIDATED")
+                return "Validated";
+
+            if (request == "WARNING")
+                return "Warning";
+
+            if (IsSuccessStatus(request) || IsSuccessStatus(processing) || processed)
+                return "Complete";
+
+            if (request is "INPROCESS" or "PROCESSING")
+                return "Processing";
+
+            return "Pending";
+        }
+
+        private static string NormalizeStatusToken(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "";
+
+            return value.Trim().ToUpperInvariant().Replace(" ", "").Replace("_", "");
+        }
+
+        private static bool IsErrorStatus(string token) =>
+            token is "ERROR" or "REJECTED" or "STALE" or "FAILED" or "FAILURE";
+
+        private static bool IsSuccessStatus(string token) =>
+            token is "COMPLETE" or "COMPLETED" or "SUCCESS" or "PROCESSED";
 
         private static string? NormalizeErrorMessages(string? err)
         {

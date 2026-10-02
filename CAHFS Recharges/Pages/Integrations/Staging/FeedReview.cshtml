@@ -36,7 +36,7 @@
         <h1 class="h3 mb-1">Staging Data</h1>
         <p class="text-muted mb-0">View and manage batch data and associated items</p>
     </div>
-    <form method="post" asp-page-handler="ValidatePending">
+    <form method="post" asp-page-handler="ValidatePending" data-caei-region="validate">
         <input type="hidden" name="Integration" value="@integration" />
         <input type="hidden" name="SelectedBatchId" value="@Model.SelectedBatchId" />
         <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
@@ -48,7 +48,7 @@
 </div>
 
 @* ===== 5-COLUMN SUMMARY GRID WITH QUICK ACTIONS (Compact) ===== *@
-<div class="staging-stats-grid staging-stats-grid-5">
+<div class="staging-stats-grid staging-stats-grid-5" data-caei-region="summary">
     <div class="staging-stat-card">
         <div class="d-flex align-items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -118,13 +118,11 @@
     </div>
 }
 
-@* ===== FILTERS CARD ===== *@
-<div class="card mb-3">
-    <div class="card-body">
-        <h5 class="mb-3">Filters</h5>
-        <form method="get">
+@* ===== FILTERS ===== *@
+<form method="get" class="caei-control-panel mb-4" aria-label="Staging filters" data-caei-filter>
+        <h2 class="h6 mb-3">Filters</h2>
             <input type="hidden" name="integration" value="@integration" />
-            <div class="row g-3 mb-3">
+            <div class="row g-3 align-items-end">
                 <div class="col-md-3 col-sm-6">
                     <label asp-for="FromDate" class="form-label">From Date</label>
                     <input asp-for="FromDate" class="form-control" type="date" />
@@ -148,15 +146,14 @@
                     <label asp-for="JournalName" class="form-label">Journal Name</label>
                     <input asp-for="JournalName" class="form-control" placeholder="Search..." />
                 </div>
-            </div>
-            <div class="d-flex gap-2">
+                <div class="col-md-3 col-sm-6 d-flex gap-2">
                 <button type="submit" class="btn btn-primary">Apply Filters</button>
-                <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview" class="btn btn-outline-secondary">Reset</a>
+                <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview" class="btn btn-outline-secondary" data-caei-filter-nav>Reset</a>
+                </div>
             </div>
         </form>
-    </div>
-</div>
 
+<div data-caei-region="results">
 @* ===== EXPORT ACTIONS CARD ===== *@
 @{
     var statusOptions = new[] { "Pending", "Ready", "Needs Review", "Validated", "Success", "Error" };
@@ -223,21 +220,26 @@
 
 @* ===== BATCHES TABLE CARD ===== *@
 <div class="card mb-3">
-    <div class="card-body border-bottom py-3">
+    <div class="card-body border-bottom py-3 d-flex flex-wrap align-items-start justify-content-between gap-2">
+        <div>
         <h5 class="mb-1">Batches</h5>
         <p class="text-muted small mb-0">Select a batch to view its items</p>
+        </div>
+        <partial name="_TableDensityToggle" />
     </div>
     @if (!Model.Batches.Any())
     {
-        <div class="card-body text-center py-5">
-            <p class="text-muted mb-2">No batches found matching the selected filters.</p>
-            <a href="@(pathBase)/Integrations/@integration/Staging/FeedReview" class="btn btn-outline-primary btn-sm">Clear All Filters</a>
-        </div>
+        <partial name="_EmptyState" model='new CAHFS_Recharges.Models.CaeiEmptyState {
+            Title = "No batches",
+            Message = "No batches found matching the selected filters.",
+            ActionHref = $"{pathBase}/Integrations/{integration}/Staging/FeedReview",
+            ActionText = "Clear filters"
+        }' />
     }
     else
     {
         <div class="table-responsive caei-scroll-y-400">
-            <table class="table table-hover table-sm mb-0">
+            <table class="table table-borderless caei-data-table mb-0">
                 <thead class="sticky-top bg-white">
                     <tr>
                         <th scope="col"></th>
@@ -262,10 +264,21 @@
                                     View items
                                 </a>
                             </td>
-                            <td class="font-mono">@b.BatchID</td>
+                            <td class="font-mono caei-data-key">@b.BatchID</td>
                             <td>@(b.AETransactionDate?.ToString("yyyy-MM-dd") ?? "")</td>
                             <td>@(b.DateSent?.ToString("yyyy-MM-dd") ?? "")</td>
-                            <td>@b.AERequestStatus</td>
+                            <td>
+                                @{
+                                    var batchStatusClass = b.AERequestStatus switch
+                                    {
+                                        "Ready" or "Validated" or "SUCCESS" or "Success" or "Sent" => "badge-soft-success",
+                                        "Needs Review" or "Pending" => "badge-soft-warning",
+                                        "ERROR" or "Error" => "badge-soft-danger",
+                                        _ => "badge-soft-secondary"
+                                    };
+                                }
+                                <span class="badge @batchStatusClass">@b.AERequestStatus</span>
+                            </td>
                             <td>@b.AEJournalName</td>
                             <td class="font-mono">@b.AEJournalReference</td>
                             <td class="text-end">@(b.BatchTotal?.ToString("N2"))</td>
@@ -285,13 +298,16 @@
         <div class="card-body border-bottom py-3 bg-light">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
                     <h5 class="mb-1">Items for @(Model.SelectedBatchJournalName ?? "Batch " + selectedBatch.BatchID)</h5>
+                    <partial name="_TableDensityToggle" />
+                    </div>
                     <p class="text-muted small mb-0" id="items-count">@Model.Items.Count() items</p>
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
                     @if (Model.ShowInvalidOnly)
                     {
-                        <span class="badge bg-warning text-dark align-self-center">Showing COA issues only</span>
+                        <span class="badge badge-soft-warning align-self-center">Showing COA issues only</span>
                     }
                     else if (!Model.ShowExcludedOnly)
                     {
@@ -303,7 +319,7 @@
 
                     @if (Model.ShowExcludedOnly)
                     {
-                        <span class="badge bg-secondary align-self-center">Showing excluded items</span>
+                        <span class="badge badge-soft-secondary align-self-center">Showing excluded items</span>
                     }
                     else if (!Model.ShowInvalidOnly)
                     {
@@ -398,27 +414,26 @@
         <div id="items-body">
         @if (!Model.Items.Any())
         {
-            <div class="card-body text-center py-4" id="items-empty">
-                <p class="text-muted mb-0">
-                    @if (Model.ShowExcludedOnly)
-                    {
-                        @:No excluded items in this batch.
-                    }
-                    else if (Model.ShowInvalidOnly)
-                    {
-                        @:No lines with COA issues in this batch (both sides are Valid, or issues were excluded).
-                    }
-                    else
-                    {
-                        @:No items found in this batch.
-                    }
-                </p>
+            <div id="items-empty">
+                <partial name="_EmptyState" model='new CAHFS_Recharges.Models.CaeiEmptyState {
+                    Title = Model.ShowExcludedOnly ? "No excluded items" : Model.ShowInvalidOnly ? "No COA issues" : "No items",
+                    Message = Model.ShowExcludedOnly
+                        ? "No excluded items in this batch."
+                        : Model.ShowInvalidOnly
+                            ? "No lines with COA issues in this batch. Both sides are valid, or the issues were excluded."
+                            : "No items found in this batch.",
+                    ActionHref = (Model.ShowExcludedOnly || Model.ShowInvalidOnly)
+                        ? $"{pathBase}/Integrations/{integration}/Staging/FeedReview?FromDate={Model.FromDate:yyyy-MM-dd}&ToDate={Model.ToDate:yyyy-MM-dd}&Status={Model.Status}&JournalName={Model.JournalName}&SelectedBatchId={Model.SelectedBatchId}#items"
+                        : null,
+                    ActionText = "Show all items",
+                    UseFilterNav = false
+                }' />
             </div>
         }
         else
         {
             <div class="table-responsive caei-scroll-y-500" id="items-table-wrap">
-                <table class="table table-hover table-sm mb-0">
+                <table class="table table-borderless caei-data-table mb-0">
                     <thead class="sticky-top bg-white">
                         <tr>
                             <th scope="col">Record ID</th>
@@ -456,7 +471,7 @@
                                 @i.RecordID
                                 @if (i.DoNotInclude && !Model.ShowExcludedOnly)
                                 {
-                                    <span class="badge bg-secondary ms-1">Excluded</span>
+                                    <span class="badge badge-soft-secondary ms-1">Excluded</span>
                                 }
                             </td>
                             <td>@i.OrignalDocNumber</td>
@@ -468,8 +483,8 @@
                             <td class="text-end">@i.TotalCharge.ToString("N2")</td>
                             <td>@i.ClientID</td>
                             <td>@i.SystemID</td>
-                            <td>@debitStatus</td>
-                            <td>@creditStatus</td>
+                            <td>@if (!string.IsNullOrWhiteSpace(debitStatus)) { <span class="badge @(debitStatus == "Valid" ? "badge-soft-success" : "badge-soft-danger")">@debitStatus</span> }</td>
+                            <td>@if (!string.IsNullOrWhiteSpace(creditStatus)) { <span class="badge @(creditStatus == "Valid" ? "badge-soft-success" : "badge-soft-danger")">@creditStatus</span> }</td>
                             <td>@i.TestCode</td>
                             <td>@i.TestName</td>
                             <td class="font-mono small">@i.UnprocessedCOAString</td>
@@ -548,11 +563,13 @@
 else if (Model.Batches.Any())
 {
     <div class="card">
-        <div class="card-body text-center py-4">
-            <p class="text-muted mb-0"><em>Select a batch above to view its items.</em></p>
-        </div>
+        <partial name="_EmptyState" model='new CAHFS_Recharges.Models.CaeiEmptyState {
+            Title = "Select a batch",
+            Message = "Select a batch above to view its items."
+        }' />
     </div>
 }
+</div>
 
 @section Scripts {
     <script src="~/js/feed-review-scroll.js" asp-append-version="true"></script>

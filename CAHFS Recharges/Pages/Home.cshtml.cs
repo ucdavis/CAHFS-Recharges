@@ -3,6 +3,7 @@ using CAHFS_Recharges.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.Security.Claims;
 
 namespace CAHFS_Recharges.Pages
 {
@@ -11,7 +12,17 @@ namespace CAHFS_Recharges.Pages
     {
         private readonly IIntegrationContextService _integrationService;
 
-        public string Username => User.Identity?.Name ?? "User";
+        public string FirstName
+        {
+            get
+            {
+                var givenName = User.FindFirst(ClaimTypes.GivenName)?.Value;
+                if (!string.IsNullOrWhiteSpace(givenName))
+                    return givenName;
+
+                return User.Identity?.Name ?? "User";
+            }
+        }
 
         public HomeModel(IIntegrationContextService integrationService)
         {

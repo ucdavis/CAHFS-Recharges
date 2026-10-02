@@ -4,536 +4,185 @@
     ViewData["Title"] = "Select Integration";
 }
 
-<style>
-    /* Home page styles - React-style design */
-    .home-page {
-        min-height: calc(100vh - 80px);
-        background: linear-gradient(135deg, rgba(2, 40, 81, 0.05) 0%, #fff 50%, rgba(2, 40, 81, 0.05) 100%);
-    }
-    
-    .home-content {
-        max-width: 80rem;
-        margin: 0 auto;
-        padding: 2rem 1rem;
-    }
-    
-    @@media (min-width: 640px) {
-        .home-content {
-            padding: 2rem 1.5rem;
-        }
-    }
-    
-    @@media (min-width: 1024px) {
-        .home-content {
-            padding: 2rem 2rem;
-        }
-    }
-    
-    /* Welcome section */
-    .home-welcome {
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    
-    .home-welcome h2 {
-        font-size: 1.875rem;
-        font-weight: 400;
-        color: var(--gray-900, #111827);
-        margin-bottom: 0.75rem;
-    }
-    
-    @@media (min-width: 768px) {
-        .home-welcome h2 {
-            font-size: 2.25rem;
-        }
-    }
-    
-    .home-welcome .username {
-        color: var(--gparc-primary, #022851);
-        font-weight: 600;
-    }
-    
-    .home-welcome p {
-        font-size: 1.125rem;
-        color: var(--gray-600, #4b5563);
-        margin: 0;
-    }
-    
-    /* Integration Cards Grid */
-    .integration-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1.25rem;
-        max-width: 58rem;
-        margin: 0 auto;
-    }
-    
-    @@media (min-width: 768px) {
-        .integration-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-    
-    /* Integration Card - React-style */
-    .integration-card {
-        background-color: #fff;
-        border: 2px solid var(--gray-200, #e5e7eb);
-        border-radius: 0.75rem;
-        padding: 1.625rem;
-        transition: all 0.3s ease;
-        cursor: pointer;
-    }
-    
-    .integration-card:hover {
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    }
-    
-    .integration-card.cahfs:hover {
-        border-color: rgba(2, 40, 81, 0.3);
-    }
-    
-    .integration-card.equine:hover {
-        border-color: rgba(61, 174, 43, 0.3);
-    }
-    
-    .integration-card:focus-within {
-        outline: 2px solid var(--gparc-primary, #022851);
-        outline-offset: 2px;
-    }
-    
-    .integration-card-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        margin-bottom: 1rem;
-    }
-    
-    .integration-icon {
-        width: 56px;
-        height: 56px;
-        border-radius: 0.625rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #fff;
-        transition: transform 0.2s ease;
-    }
-    
-    .integration-card:hover .integration-icon {
-        transform: scale(1.1);
-    }
-    
-    .integration-icon.cahfs {
-        background-color: var(--gparc-primary, #022851);
-    }
-    
-    .integration-icon.equine {
-        background-color: var(--gpare-primary, #3DAE2B);
-    }
-    
-    .status-indicator {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.875rem;
-        color: var(--gray-600, #4b5563);
-    }
-    
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background-color: #22c55e;
-        animation: pulse 2s infinite;
-    }
-    
-    @@media (prefers-reduced-motion: reduce) {
-        .status-dot { animation: none; }
-    }
-    
-    @@keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-    
-    .integration-content {
-        margin-bottom: 1.25rem;
-    }
-    
-    .integration-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--gray-900, #111827);
-        margin-bottom: 0.35rem;
-    }
-    
-    .integration-desc {
-        color: var(--gray-600, #4b5563);
-        font-size: 0.875rem;
-        margin-bottom: 0;
-        line-height: 1.5;
-    }
-    
-    /* Getting Started Info Card */
-    .info-card {
-        max-width: 58rem;
-        margin: 2rem auto 0;
-        background-color: rgba(111, 207, 235, 0.1);
-        border: 1px solid rgba(0, 178, 227, 0.3);
-        border-radius: 0.75rem;
-        padding: 1.5rem;
-        display: flex;
-        gap: 1rem;
-    }
-    
-    .info-card-icon {
-        width: 40px;
-        height: 40px;
-        min-width: 40px;
-        background-color: var(--gparc-primary, #022851);
-        border-radius: 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        color: #fff;
-    }
-    
-    .info-card-content h3 {
-        font-size: 1.125rem;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-        color: var(--gray-900, #111827);
-    }
-    
-    .info-card-content p {
-        font-size: 0.875rem;
-        color: var(--gray-700, #374151);
-        margin-bottom: 0.75rem;
-        line-height: 1.5;
-    }
-    
-    @@media (max-width: 640px) {
-        .info-card {
-            flex-direction: column;
-        }
-    }
-    
-    /* Integration Button */
-    .btn-integration {
-        width: 100%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        padding: 0.625rem 1.25rem;
-        font-size: 0.9375rem;
-        font-weight: 500;
-        border-radius: 0.5rem;
-        border: none;
-        color: #fff;
-        cursor: pointer;
-        transition: background-color 0.15s ease;
-    }
-    
-    .btn-integration svg {
-        transition: transform 0.15s ease;
-    }
-    
-    .integration-card:hover .btn-integration svg {
-        transform: translateX(4px);
-    }
-    
-    .btn-cahfs {
-        background-color: var(--gparc-primary, #022851);
-    }
-    
-    .btn-cahfs:hover {
-        background-color: var(--gparc-hover, #011a33);
-        color: #fff;
-    }
-    
-    .btn-equine {
-        background-color: var(--gpare-primary, #3DAE2B);
-    }
-    
-    .btn-equine:hover {
-        background-color: var(--gpare-hover, #2d8a22);
-        color: #fff;
-    }
-
-    .home-section {
-        max-width: 58rem;
-        margin: 0 auto 2rem;
-    }
-
-    .home-section:last-of-type {
-        margin-bottom: 0;
-    }
-
-    .home-section-title {
-        font-size: calc(1.0625rem + 2pt);
-        font-weight: 600;
-        color: var(--gray-700, #374151);
-        margin: 0 0 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid var(--gray-200, #e5e7eb);
-    }
-
-    .integration-card.lockbox:hover {
-        border-color: rgba(218, 170, 0, 0.45);
-    }
-
-    .integration-card.lockbox.equine:hover {
-        border-color: rgba(218, 170, 0, 0.45);
-    }
-
-    .integration-icon.lockbox {
-        background-color: #022851;
-        border: 2px solid #DAAA00;
-    }
-
-    .integration-icon.lockbox.equine {
-        background-color: var(--gpare-primary, #3DAE2B);
-        border: 2px solid #DAAA00;
-    }
-
-    .btn-lockbox {
-        background-color: #022851;
-        border: 2px solid #DAAA00;
-    }
-
-    .btn-lockbox:hover {
-        background-color: var(--gparc-hover, #011a33);
-        color: #fff;
-    }
-
-    .btn-lockbox.equine {
-        background-color: var(--gpare-primary, #3DAE2B);
-        border: 2px solid #DAAA00;
-    }
-
-    .btn-lockbox.equine:hover {
-        background-color: var(--gpare-hover, #2d8a22);
-        color: #fff;
-    }
-
-    .integration-pobox {
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: var(--gray-600, #4b5563);
-        margin: 0;
-    }
-
-    .info-card-content ul {
-        font-size: 0.875rem;
-        color: var(--gray-700, #374151);
-        margin: 0;
-        padding-left: 1.25rem;
-        line-height: 1.55;
-    }
-
-    .info-card-content ul li {
-        margin-bottom: 0.35rem;
-    }
-
-    .info-card-content ul li:last-child {
-        margin-bottom: 0;
-    }
-</style>
-
-<div class="home-page">
+<div class="caei-home">
     <h1 class="visually-hidden">Select Integration</h1>
-    <div class="home-content">
-        <div class="home-welcome">
-            <h2>Welcome, <span class="username">@Model.Username</span></h2>
-            <p>Select an integration to begin working</p>
-        </div>
-
-        <div class="home-section">
-            <h2 class="home-section-title">Aggie Enterprise Integration</h2>
-            <div class="integration-grid">
-            @* CAHFS Integration Card *@
-            <div class="integration-card cahfs">
-                <div class="integration-card-header">
-                    <div class="integration-icon cahfs" aria-hidden="true">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm.5-5v1h1a.5.5 0 0 1 0 1h-1v1a.5.5 0 0 1-1 0v-1h-1a.5.5 0 0 1 0-1h1v-1a.5.5 0 0 1 1 0Z"/>
-                            <path d="M2 1a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6.5a.5.5 0 0 1-1 0V1H3v14h3a.5.5 0 0 1 0 1H2a1 1 0 0 1-1-1V1Z"/>
-                            <path d="M4 3a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H4Zm0 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H4Zm0 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H4Z"/>
-                        </svg>
-                    </div>
-                    <div class="status-indicator">
-                        <div class="status-dot"></div>
-                        Active
-                    </div>
-                </div>
-                <div class="integration-content">
-                    <h3 class="integration-title">CAHFS</h3>
-                    <p class="integration-desc">
-                        California Animal Health & Food Safety Laboratory
-                    </p>
-                </div>
-                <form method="post" asp-page-handler="SelectIntegration">
-                    <input type="hidden" name="integration" value="CAHFS" />
-                    <input type="hidden" name="family" value="AE" />
-                    <button type="submit" class="btn-integration btn-cahfs">
-                        Open CAHFS
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
-                        </svg>
-                    </button>
-                </form>
-            </div>
-
-            @* EQUINE Integration Card *@
-            <div class="integration-card equine">
-                <div class="integration-card-header">
-                    <div class="integration-icon equine" aria-hidden="true">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zM.146 10.146a.5.5 0 0 1 .708 0L2 11.293V7a6 6 0 1 1 12 0v4.293l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L13 11.293V7a5 5 0 0 0-10 0v4.293l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 0-.708z"/>
-                        </svg>
-                    </div>
-                    <div class="status-indicator">
-                        <div class="status-dot"></div>
-                        Active
-                    </div>
-                </div>
-                <div class="integration-content">
-                    <h3 class="integration-title">EACL</h3>
-                    <p class="integration-desc">
-                        Equine Analytical Chemistry Laboratory
-                    </p>
-                </div>
-                <form method="post" asp-page-handler="SelectIntegration">
-                    <input type="hidden" name="integration" value="EQUINE" />
-                    <input type="hidden" name="family" value="AE" />
-                    <button type="submit" class="btn-integration btn-equine">
-                        Open EACL
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
-                        </svg>
-                    </button>
-                </form>
-            </div>
-            </div>
-        </div>
-
-        <div class="home-section">
-            <h2 class="home-section-title">Bank of America Lockbox Integration</h2>
-            <div class="integration-grid">
-            @* CAHFS Lockbox Card *@
-            <div class="integration-card lockbox">
-                <div class="integration-card-header">
-                    <div class="integration-icon lockbox" aria-hidden="true">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                            <path d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
-                            <path d="M0 4a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V4zm2 1v6h12V5H2z"/>
-                        </svg>
-                    </div>
-                    <div class="status-indicator">
-                        <div class="status-dot"></div>
-                        Active
-                    </div>
-                </div>
-                <div class="integration-content">
-                    <h3 class="integration-title">CAHFS Lockbox</h3>
-                    <p class="integration-pobox">PO Box 744833</p>
-                </div>
-                <form method="post" asp-page-handler="SelectIntegration">
-                    <input type="hidden" name="integration" value="CAHFS" />
-                    <input type="hidden" name="family" value="Lockbox" />
-                    <button type="submit" class="btn-integration btn-lockbox">
-                        Open Lockbox
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
-                        </svg>
-                    </button>
-                </form>
-            </div>
-
-            @* EACL Lockbox Card *@
-            <div class="integration-card lockbox equine">
-                <div class="integration-card-header">
-                    <div class="integration-icon lockbox equine" aria-hidden="true">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                            <path d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
-                            <path d="M0 4a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V4zm2 1v6h12V5H2z"/>
-                        </svg>
-                    </div>
-                    <div class="status-indicator">
-                        <div class="status-dot"></div>
-                        Active
-                    </div>
-                </div>
-                <div class="integration-content">
-                    <h3 class="integration-title">EACL Lockbox</h3>
-                    <p class="integration-pobox">PO Box 744835</p>
-                </div>
-                <form method="post" asp-page-handler="SelectIntegration">
-                    <input type="hidden" name="integration" value="EQUINE" />
-                    <input type="hidden" name="family" value="Lockbox" />
-                    <button type="submit" class="btn-integration btn-lockbox equine">
-                        Open Lockbox
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
-                        </svg>
-                    </button>
-                </form>
-            </div>
-            </div>
-        </div>
-
-        <div class="home-section">
-            <h2 class="home-section-title">HIWU Integration</h2>
-            <div class="integration-grid">
-            <div class="integration-card equine">
-                <div class="integration-card-header">
-                    <div class="integration-icon equine" aria-hidden="true">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                            <path d="M5 4a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zM5 9a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
-                            <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/>
-                        </svg>
-                    </div>
-                    <div class="status-indicator">
-                        <div class="status-dot"></div>
-                        Active
-                    </div>
-                </div>
-                <div class="integration-content">
-                    <h3 class="integration-title">EACL HIWU</h3>
-                    <p class="integration-desc">HIWU manifest files for Equine Analytical Chemistry Laboratory</p>
-                </div>
-                <form method="post" asp-page-handler="SelectIntegration">
-                    <input type="hidden" name="integration" value="EQUINE" />
-                    <input type="hidden" name="family" value="Hiwu" />
-                    <button type="submit" class="btn-integration btn-equine">
-                        Open HIWU
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
-                        </svg>
-                    </button>
-                </form>
-            </div>
-            </div>
-        </div>
-
-        @* Getting Started Info Card *@
-        <div class="info-card">
-            <div class="info-card-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            </div>
-            <div class="info-card-content">
-                <h3>Getting Started</h3>
-                <p>Select the lab and integration type for your work. Each workspace opens with tools specific to that system.</p>
-                <ul>
-                    <li><strong>Aggie Enterprise (CAHFS or EACL):</strong> Review staged billing data, fix COA validation errors, send journals to Aggie Enterprise, and view submission history.</li>
-                    <li><strong>Bank of America Lockbox (CAHFS or EACL):</strong> Review daily lockbox files, match checks to Great Plains invoices, post payments, and view payment history.</li>
-                    <li><strong>HIWU (EACL):</strong> Review downloaded HIWU manifest files, open a file, and download the raw XML or the HIWU CSV.</li>
-                </ul>
-            </div>
-        </div>
+    <div class="caei-home-welcome">
+        <h2>Welcome, <span class="caei-data-key">@Model.FirstName</span></h2>
+        <p class="text-muted mb-0">Select an integration to begin working</p>
     </div>
+
+<section class="caei-home-section" aria-labelledby="ae-workspaces">
+    <h2 id="ae-workspaces" class="h5 caei-data-key caei-home-section-title">Aggie Enterprise Integration</h2>
+    <div class="caei-home-grid">
+            <article class="card caei-workspace-card h-100 cahfs-theme">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-start justify-content-between mb-3">
+                        <div class="caei-workspace-mark" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm.5-5v1h1a.5.5 0 0 1 0 1h-1v1a.5.5 0 0 1-1 0v-1h-1a.5.5 0 0 1 0-1h1v-1a.5.5 0 0 1 1 0Z"/>
+                                <path d="M2 1a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6.5a.5.5 0 0 1-1 0V1H3v14h3a.5.5 0 0 1 0 1H2a1 1 0 0 1-1-1V1Z"/>
+                                <path d="M4 3a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H4Zm0 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H4Zm0 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H4Z"/>
+                            </svg>
+                        </div>
+                        <span class="status-indicator text-muted small">
+                            <span class="status-indicator-dot success" aria-hidden="true"></span>
+                            Active
+                        </span>
+                    </div>
+                    <h3 class="h5 caei-data-key">CAHFS</h3>
+                    <p class="text-muted small mb-3">California Animal Health &amp; Food Safety Laboratory</p>
+                    <form method="post" asp-page-handler="SelectIntegration" class="mt-auto">
+                        <input type="hidden" name="integration" value="CAHFS" />
+                        <input type="hidden" name="family" value="AE" />
+                        <button type="submit" class="btn btn-primary w-100 caei-data-key">
+                            Open CAHFS
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </article>
+            <article class="card caei-workspace-card h-100 equine-theme">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-start justify-content-between mb-3">
+                        <div class="caei-workspace-mark" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zM.146 10.146a.5.5 0 0 1 .708 0L2 11.293V7a6 6 0 1 1 12 0v4.293l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L13 11.293V7a5 5 0 0 0-10 0v4.293l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 0-.708z"/>
+                            </svg>
+                        </div>
+                        <span class="status-indicator text-muted small">
+                            <span class="status-indicator-dot success" aria-hidden="true"></span>
+                            Active
+                        </span>
+                    </div>
+                    <h3 class="h5 caei-data-key">EACL</h3>
+                    <p class="text-muted small mb-3">Equine Analytical Chemistry Laboratory</p>
+                    <form method="post" asp-page-handler="SelectIntegration" class="mt-auto">
+                        <input type="hidden" name="integration" value="EQUINE" />
+                        <input type="hidden" name="family" value="AE" />
+                        <button type="submit" class="btn btn-primary w-100 caei-data-key">
+                            Open EACL
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </article>
+    </div>
+</section>
+
+<section class="caei-home-section" aria-labelledby="lockbox-workspaces">
+    <h2 id="lockbox-workspaces" class="h5 caei-data-key caei-home-section-title">Bank of America Lockbox Integration</h2>
+    <div class="caei-home-grid">
+            <article class="card caei-workspace-card h-100 cahfs-theme">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-start justify-content-between mb-3">
+                        <div class="caei-workspace-mark caei-lockbox" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
+                                <path d="M0 4a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V4zm2 1v6h12V5H2z"/>
+                            </svg>
+                        </div>
+                        <span class="status-indicator text-muted small">
+                            <span class="status-indicator-dot success" aria-hidden="true"></span>
+                            Active
+                        </span>
+                    </div>
+                    <h3 class="h5 caei-data-key">CAHFS Lockbox</h3>
+                    <p class="text-muted small mb-3">PO Box 744833</p>
+                    <form method="post" asp-page-handler="SelectIntegration" class="mt-auto">
+                        <input type="hidden" name="integration" value="CAHFS" />
+                        <input type="hidden" name="family" value="Lockbox" />
+                        <button type="submit" class="btn btn-primary w-100 caei-data-key caei-lockbox">
+                            Open Lockbox
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </article>
+            <article class="card caei-workspace-card h-100 equine-theme">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-start justify-content-between mb-3">
+                        <div class="caei-workspace-mark caei-lockbox" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
+                                <path d="M0 4a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V4zm2 1v6h12V5H2z"/>
+                            </svg>
+                        </div>
+                        <span class="status-indicator text-muted small">
+                            <span class="status-indicator-dot success" aria-hidden="true"></span>
+                            Active
+                        </span>
+                    </div>
+                    <h3 class="h5 caei-data-key">EACL Lockbox</h3>
+                    <p class="text-muted small mb-3">PO Box 744835</p>
+                    <form method="post" asp-page-handler="SelectIntegration" class="mt-auto">
+                        <input type="hidden" name="integration" value="EQUINE" />
+                        <input type="hidden" name="family" value="Lockbox" />
+                        <button type="submit" class="btn btn-primary w-100 caei-data-key caei-lockbox">
+                            Open Lockbox
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </article>
+    </div>
+</section>
+
+<section class="caei-home-section" aria-labelledby="hiwu-workspaces">
+    <h2 id="hiwu-workspaces" class="h5 caei-data-key caei-home-section-title">HIWU Integration</h2>
+    <div class="caei-home-grid">
+            <article class="card caei-workspace-card h-100 equine-theme">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-start justify-content-between mb-3">
+                        <div class="caei-workspace-mark" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M5 4a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zM5 9a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
+                                <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/>
+                            </svg>
+                        </div>
+                        <span class="status-indicator text-muted small">
+                            <span class="status-indicator-dot success" aria-hidden="true"></span>
+                            Active
+                        </span>
+                    </div>
+                    <h3 class="h5 caei-data-key">EACL HIWU</h3>
+                    <p class="text-muted small mb-3">HIWU manifest files for Equine Analytical Chemistry Laboratory</p>
+                    <form method="post" asp-page-handler="SelectIntegration" class="mt-auto">
+                        <input type="hidden" name="integration" value="EQUINE" />
+                        <input type="hidden" name="family" value="Hiwu" />
+                        <button type="submit" class="btn btn-primary w-100 caei-data-key">
+                            Open HIWU
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </article>
+    </div>
+</section>
+
+<section class="caei-home-info" aria-labelledby="getting-started">
+    <div class="caei-workspace-mark" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+    </div>
+    <div>
+        <h2 id="getting-started" class="h5 caei-data-key">Getting Started</h2>
+        <p class="text-muted small">Select the lab and integration type for your work. Each workspace opens with tools specific to that system.</p>
+        <ul class="small text-muted mb-0">
+            <li><span class="caei-data-key">Aggie Enterprise (CAHFS or EACL):</span> Review staged billing data, fix COA validation errors, send journals to Aggie Enterprise, and view submission history.</li>
+            <li><span class="caei-data-key">Bank of America Lockbox (CAHFS or EACL):</span> Review daily lockbox files, match checks to Great Plains invoices, post payments, and view payment history.</li>
+            <li><span class="caei-data-key">HIWU (EACL):</span> Review downloaded HIWU manifest files, open a file, and download the raw XML or the HIWU CSV.</li>
+        </ul>
+    </div>
+</section>
 </div>

@@ -84,7 +84,7 @@ namespace CAHFS_Recharges.Pages.Integrations.History
 
         public async Task OnGetAsync()
         {
-            // No default date range - show all Validated and Error batches by default
+            // No default date range - show submitted batches. Use the status filter to narrow.
             await LoadDataAsync();
         }
 
@@ -101,10 +101,9 @@ namespace CAHFS_Recharges.Pages.Integrations.History
             var feedBatches = _dbResolver.GetFeedBatches(ResolvedIntegration);
             var feedItems = _dbResolver.GetFeedItems(ResolvedIntegration);
 
-            // Query batches with AERequestStatus of "Validated" or "Error" (trim to handle spaces)
+            // Submitted batches only. Status filter below narrows further.
             var query = feedBatches
-                .Where(b => b.AERequestStatus != null && 
-                           (b.AERequestStatus.Trim() == "Validated" || b.AERequestStatus.Trim() == "Error"))
+                .Where(b => b.AEConsumerRequestID != null)
                 .AsQueryable();
 
             // Apply date range filter (use AETransactionDate or DateSent, whichever is available)
@@ -121,9 +120,11 @@ namespace CAHFS_Recharges.Pages.Integrations.History
             {
                 query = StatusFilter switch
                 {
-                    "Completed" => query.Where(b => b.AERequestStatus == "Complete" || 
-                                                    b.AERequestStatus == "Completed" || 
-                                                    b.AERequestStatus == "Success"),
+                    "Completed" => query.Where(b => b.AERequestStatus == "Complete" ||
+                                                    b.AERequestStatus == "Completed" ||
+                                                    b.AERequestStatus == "Success" ||
+                                                    b.AERequestStatus == "Processed" ||
+                                                    b.AERequestStatus == "Validated"),
                     "Sent" => query.Where(b => b.AERequestStatus == "Sent" || 
                                                b.AERequestStatus == "Submitted" || 
                                                b.AERequestStatus == "Validated" ||
@@ -352,10 +353,10 @@ namespace CAHFS_Recharges.Pages.Integrations.History
 
             return dbStatus.ToLowerInvariant() switch
             {
-                "complete" or "completed" or "success" => "Completed",
-                "sent" or "submitted" or "processing" => "Sent",
+                "complete" or "completed" or "success" or "processed" => "Completed",
+                "sent" or "submitted" or "processing" or "inprocess" => "Sent",
                 "pending" or "needs review" or "ready" => "Pending",
-                "error" or "failed" or "rejected" => "Error",
+                "error" or "failed" or "rejected" or "stale" => "Error",
                 _ => dbStatus
             };
         }
@@ -450,10 +451,8 @@ Error: {batch.ErrorDetail ?? "(none)"}
         {
             var feedBatches = _dbResolver.GetFeedBatches(ResolvedIntegration);
 
-            // Build query with same filters as page display (trim to handle spaces)
             var query = feedBatches
-                .Where(b => b.AERequestStatus != null && 
-                           (b.AERequestStatus.Trim() == "Validated" || b.AERequestStatus.Trim() == "Error"))
+                .Where(b => b.AEConsumerRequestID != null)
                 .AsQueryable();
 
             // Apply date range filter (use AETransactionDate or DateSent)
@@ -469,9 +468,11 @@ Error: {batch.ErrorDetail ?? "(none)"}
             {
                 query = StatusFilter switch
                 {
-                    "Completed" => query.Where(b => b.AERequestStatus == "Complete" || 
-                                                    b.AERequestStatus == "Completed" || 
-                                                    b.AERequestStatus == "Success"),
+                    "Completed" => query.Where(b => b.AERequestStatus == "Complete" ||
+                                                    b.AERequestStatus == "Completed" ||
+                                                    b.AERequestStatus == "Success" ||
+                                                    b.AERequestStatus == "Processed" ||
+                                                    b.AERequestStatus == "Validated"),
                     "Sent" => query.Where(b => b.AERequestStatus == "Sent" || 
                                                b.AERequestStatus == "Submitted" || 
                                                b.AERequestStatus == "Validated" ||

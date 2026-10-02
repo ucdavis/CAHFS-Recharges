@@ -1,11 +1,13 @@
 @using CAHFS_Recharges.Models
 @using CAHFS_Recharges.Services
+@using System.Security.Claims
 @inject IWebHostEnvironment Environment
 @{
     var integration = ViewData["Integration"] as string;
     var hasIntegration = !string.IsNullOrEmpty(integration);
     var isAdmin = ViewData["IsAdmin"] as bool? ?? false;
-    var username = User.Identity?.Name ?? "Guest";
+    var givenName = User.FindFirst(ClaimTypes.GivenName)?.Value;
+    var username = !string.IsNullOrWhiteSpace(givenName) ? givenName : (User.Identity?.Name ?? "Guest");
     
     // Integration display names and theme class
     var integrationUpper = integration?.ToUpperInvariant() ?? "";

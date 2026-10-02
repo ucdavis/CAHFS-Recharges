@@ -6,9 +6,12 @@
 
 <div class="card mb-3">
     <div class="card-body">
-        <h2 class="h5 mb-3">Mission</h2>
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <h2 class="h5 mb-0">Mission</h2>
+        <partial name="_TableDensityToggle" />
+        </div>
         <div class="table-responsive">
-            <table class="table table-sm mb-0">
+            <table class="table table-borderless caei-data-table mb-0">
                 <thead>
                     <tr>
                         <th scope="col">Field</th>
@@ -33,10 +36,13 @@
 
 <div class="card mb-3">
     <div class="card-body border-bottom py-3">
+        <div class="d-flex flex-wrap align-items-center gap-2">
         <h2 class="h5 mb-0">Samples</h2>
+        <partial name="_TableDensityToggle" />
+        </div>
     </div>
     <div class="table-responsive">
-        <table class="table table-sm mb-0">
+        <table class="table table-borderless caei-data-table mb-0">
             <thead>
                 <tr>
                     @foreach (var column in Model.SampleColumns)

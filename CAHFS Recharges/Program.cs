@@ -321,7 +321,9 @@ try
             .AllowUnsafeEval();
 
         csp.AllowFrames.FromNowhere();
-        csp.AllowFonts.FromSelf();
+        csp.AllowFonts
+            .FromSelf()
+            .From("https://fonts.gstatic.com");
         csp.AllowFraming.FromNowhere();
 
         csp.AllowImages
@@ -335,6 +337,7 @@ try
 
         csp.AllowStyles
             .FromSelf()
+            .From("https://fonts.googleapis.com")
             .AllowUnsafeInline();
     });
 
@@ -408,6 +411,13 @@ try
             "WednesdaySendLastWeek",
             job => job.SendLastWeekBatchesJob(),
             hangCronWed,
+            new RecurringJobOptions { TimeZone = tz });
+
+        var hangCronStatusPoll = builder.Configuration.GetValue<string>("Hangfire:CronStatusPoll") ?? "*/15 * * * *";
+        RecurringJob.AddOrUpdate<HangfireJobs>(
+            "PollPendingAeStatuses",
+            job => job.PollPendingAeStatusesJob(),
+            hangCronStatusPoll,
             new RecurringJobOptions { TimeZone = tz });
 
         var lockboxEnabled = builder.Configuration.GetValue<bool?>("Lockbox:Enabled") ?? true;

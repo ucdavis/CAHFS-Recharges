@@ -15,7 +15,7 @@
     </div>
 </div>
 
-<div class="staging-stats-grid staging-stats-grid-5 mb-4">
+<div class="staging-stats-grid staging-stats-grid-5 mb-4" data-caei-region="summary">
     <div class="staging-stat-card">
         <span class="staging-stat-value">@Model.Files.Count</span>
         <div class="staging-stat-label">Files shown</div>
@@ -34,11 +34,9 @@
     </div>
 </div>
 
-<div class="card mb-3">
-    <div class="card-body">
-        <h2 class="h5 mb-3">Filters</h2>
-        <form method="get">
-            <div class="row g-3 mb-3">
+<form method="get" class="caei-control-panel mb-4" aria-label="Manifest filters" data-caei-filter>
+    <h2 class="h6 mb-3">Filters</h2>
+            <div class="row g-3 align-items-end">
                 <div class="col-md-3 col-sm-6">
                     <label asp-for="FromDate" class="form-label">From date <span class="text-muted fw-normal">(optional)</span></label>
                     <input asp-for="FromDate" class="form-control" type="date" />
@@ -57,32 +55,35 @@
                         <option value="@HiwuParseStatus.Stored">Stored</option>
                     </select>
                 </div>
-            </div>
-            <div class="d-flex gap-2 flex-wrap">
+                <div class="col-md-3 col-sm-6 d-flex gap-2 flex-wrap">
                 <button type="submit" class="btn btn-primary">Apply filters</button>
-                <a href="@(pathBase)/Integrations/EQUINE/Hiwu/Files" class="btn btn-outline-secondary">Reset</a>
-                <a href="@exportUrl" class="btn btn-outline-secondary">Download Excel</a>
+                <a href="@(pathBase)/Integrations/EQUINE/Hiwu/Files" class="btn btn-outline-secondary" data-caei-filter-nav>Reset</a>
+                <a href="@exportUrl" class="btn btn-outline-secondary" data-caei-live="export">Download Excel</a>
+                </div>
             </div>
         </form>
-    </div>
-</div>
 
-<div class="card mb-3">
-    <div class="card-body border-bottom py-3">
+<div class="card mb-3" data-caei-region="results">
+    <div class="card-body border-bottom py-3 d-flex flex-wrap align-items-start justify-content-between gap-2">
+        <div>
         <h2 class="h5 mb-1">Manifest files</h2>
         <p class="text-muted small mb-0">Showing @Model.Files.Count file(s), up to 1,000. Download Excel uses these same filters.</p>
+        </div>
+        <partial name="_TableDensityToggle" />
     </div>
     @if (Model.Files.Count == 0)
     {
-        <div class="card-body text-center py-5">
-            <p class="text-muted mb-2">No manifest files found for the selected filters.</p>
-            <a href="@(pathBase)/Integrations/EQUINE/Hiwu/Files" class="btn btn-outline-primary btn-sm">Clear filters</a>
-        </div>
+        <partial name="_EmptyState" model='new CAHFS_Recharges.Models.CaeiEmptyState {
+            Title = "No manifest files",
+            Message = "No manifest files found for the selected filters.",
+            ActionHref = $"{pathBase}/Integrations/EQUINE/Hiwu/Files",
+            ActionText = "Clear filters"
+        }' />
     }
     else
     {
         <div class="table-responsive caei-scroll-y-400">
-            <table class="table table-hover table-sm mb-0">
+            <table class="table table-borderless caei-data-table mb-0">
                 <thead class="sticky-top bg-white">
                     <tr>
                         <th scope="col">File name</th>
@@ -93,13 +94,19 @@
                 <tbody>
                     @foreach (var file in Model.Files)
                     {
+                        var hiwuStatusClass = file.ParseStatus switch
+                        {
+                            HiwuParseStatus.ParseError => "badge-soft-danger",
+                            HiwuParseStatus.Amended => "badge-soft-warning",
+                            _ => "badge-soft-success"
+                        };
                         <tr>
-                            <td>
+                            <td class="caei-data-key">
                                 <a href="@(pathBase)@IntegrationLinkHelper.GetHiwuFileDetailPage(file.FileId)">@file.RemoteFileName</a>
                             </td>
                             <td>@FilesModel.ToPacific(file.ReceivedUtc).ToString("yyyy-MM-dd HH:mm")</td>
                             <td>
-                                <span class="d-inline-flex align-items-center gap-1">
+                                <span class="badge @hiwuStatusClass d-inline-flex align-items-center gap-1">
                                     @if (file.ParseStatus == HiwuParseStatus.ParseError)
                                     {
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M12 3l9 16H3L12 3z"/></svg>

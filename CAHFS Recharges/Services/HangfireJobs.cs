@@ -49,12 +49,22 @@ namespace CAHFS_Recharges.Services
     ///      - AETransactionDate is within last 7 days
     ///      - All items pass gatekeeping (valid COA, no pending validations)
     ///    - Concurrency: Disabled (only one instance runs at a time, 2-hour lock)
+    ///    - After each send, polls that batch briefly. Batches still open after that window
+    ///      are picked up by PollPendingAeStatuses.
+    ///
+    /// 6. PollPendingAeStatuses (PollPendingAeStatusesJob)
+    ///    - Schedule: Every 15 minutes (configurable via Hangfire:CronStatusPoll)
+    ///    - Purpose: Ask Aggie Enterprise for the current status of batches already submitted
+    ///      that are still Pending, Sent, Submitted, or Processing
+    ///    - Scope: CAHFS and EQUINE. Requires AEConsumerRequestID. Does not touch Ready or Needs Review.
+    ///    - Concurrency: Disabled (30-minute lock)
     /// 
     /// CONFIGURATION (appsettings.json):
     /// ==================================
     /// - Hangfire:Enabled (bool): Enable/disable Hangfire entirely
     /// - Hangfire:CronDaily (string): Cron expression for daily job
     /// - Hangfire:CronWednesday (string): Cron expression for Wednesday job
+    /// - Hangfire:CronStatusPoll (string): Cron expression for pending-batch status poll
     /// - Hangfire:TimeZone (string): Timezone for job scheduling (default: America/Los_Angeles)
     /// - Hangfire:ValidationBatchSize (int): Max items per validation run (default: 250)
     /// - Hangfire:ValidationMaxParallelCalls (int): Parallel API calls (default: 5)
@@ -292,6 +302,54 @@ namespace CAHFS_Recharges.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Hangfire: exception processing batch {BatchId}", batchId);
+                }
+            }
+        }
+
+        /// Statuses AE (or this app) uses while a submitted journal is still open.
+        /// Ready and Needs Review are local pre-send states and are not polled.
+        private static readonly string[] InFlightAeStatuses = { "PENDING", "SENT", "SUBMITTED", "PROCESSING", "INPROCESS" };
+
+        [DisableConcurrentExecution(30 * 60)]
+        public async Task PollPendingAeStatusesJob()
+        {
+            using var scope = _services.CreateScope();
+            var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var dbResolver = scope.ServiceProvider.GetRequiredService<IIntegrationDbResolver>();
+            var uploadSvc = scope.ServiceProvider.GetRequiredService<AggieEnterpriseJournalUploadService>();
+
+            var maxBatches = config.GetValue<int?>("Hangfire:MaxBatchesPerRun") ?? 50;
+
+            foreach (var integration in new[] { IntegrationType.CAHFS, IntegrationType.EQUINE })
+            {
+                var batches = dbResolver.GetFeedBatches(integration);
+                var pending = await batches
+                    .Where(b =>
+                        b.AEConsumerRequestID != null &&
+                        b.AERequestStatus != null &&
+                        InFlightAeStatuses.Contains(b.AERequestStatus.Trim().ToUpper()))
+                    .OrderBy(b => b.DateSent)
+                    .Take(maxBatches)
+                    .Select(b => new { b.BatchID, b.AERequestStatus })
+                    .ToListAsync();
+
+                _logger.LogInformation(
+                    "Hangfire: AE status poll {Integration} found {Count} in-flight batch(es).",
+                    integration, pending.Count);
+
+                foreach (var batch in pending)
+                {
+                    try
+                    {
+                        var statusResult = await uploadSvc.CheckStatusAsync(batch.BatchID, integration);
+                        _logger.LogWarning(
+                            "Hangfire: AE status poll {Integration} batch {BatchId} was {Previous}: {Message}",
+                            integration, batch.BatchID, batch.AERequestStatus, statusResult.Message);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Hangfire: AE status poll failed for batch {BatchId} ({Integration})", batch.BatchID, integration);
+                    }
                 }
             }
         }

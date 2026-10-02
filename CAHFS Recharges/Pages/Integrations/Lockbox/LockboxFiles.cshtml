@@ -31,7 +31,7 @@
     </div>
 }
 
-<div class="staging-stats-grid staging-stats-grid-5 mb-4">
+<div class="staging-stats-grid staging-stats-grid-5 mb-4" data-caei-region="summary">
     <div class="staging-stat-card">
         <span class="staging-stat-value">@summary.TotalCount</span>
         <div class="staging-stat-label">Total rows</div>
@@ -60,42 +60,39 @@
     </div>
 </div>
 
-<div class="card mb-3">
-    <div class="card-body">
-        <h2 class="h5 mb-3">Filters</h2>
-        <form method="get">
-            <input type="hidden" name="integration" value="@integration" />
-            <div class="row g-3 mb-3">
-                <div class="col-md-3 col-sm-6">
-                    <label asp-for="FromDate" class="form-label">From deposit date <span class="text-muted fw-normal">(optional)</span></label>
-                    <input asp-for="FromDate" class="form-control" type="date" />
-                </div>
-                <div class="col-md-3 col-sm-6">
-                    <label asp-for="ToDate" class="form-label">To deposit date <span class="text-muted fw-normal">(optional)</span></label>
-                    <input asp-for="ToDate" class="form-control" type="date" />
-                </div>
-                <div class="col-md-3 col-sm-6">
-                    <label asp-for="Status" class="form-label">Validation status</label>
-                    <select asp-for="Status" class="form-select">
-                        <option value="">All statuses</option>
-                        <option value="VALID">VALID</option>
-                        <option value="WARN">WARN</option>
-                        <option value="INVALID_CUSTOMER">INVALID_CUSTOMER</option>
-                        <option value="ERROR">ERROR</option>
-                        <option value="PENDING">PENDING</option>
-                    </select>
-                </div>
-            </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">Apply filters</button>
-                <a href="@(pathBase)/Integrations/@integration/Lockbox/LockboxFiles" class="btn btn-outline-secondary">Reset</a>
-            </div>
-        </form>
+<form method="get" class="caei-control-panel mb-4" aria-label="Staging filters" data-caei-filter>
+    <h2 class="h6 mb-3">Filters</h2>
+    <input type="hidden" name="integration" value="@integration" />
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3 col-sm-6">
+            <label asp-for="FromDate" class="form-label">From deposit date <span class="text-muted fw-normal">(optional)</span></label>
+            <input asp-for="FromDate" class="form-control" type="date" />
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <label asp-for="ToDate" class="form-label">To deposit date <span class="text-muted fw-normal">(optional)</span></label>
+            <input asp-for="ToDate" class="form-control" type="date" />
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <label asp-for="Status" class="form-label">Validation status</label>
+            <select asp-for="Status" class="form-select">
+                <option value="">All statuses</option>
+                <option value="VALID">VALID</option>
+                <option value="WARN">WARN</option>
+                <option value="INVALID_CUSTOMER">INVALID_CUSTOMER</option>
+                <option value="ERROR">ERROR</option>
+                <option value="PENDING">PENDING</option>
+            </select>
+        </div>
+        <div class="col-md-3 col-sm-6 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Apply filters</button>
+            <a href="@(pathBase)/Integrations/@integration/Lockbox/LockboxFiles" class="btn btn-outline-secondary" data-caei-filter-nav>Reset</a>
+        </div>
     </div>
-</div>
+</form>
 
-<div class="card mb-3">
-    <div class="card-body border-bottom py-3">
+<div class="card mb-3" data-caei-region="results">
+    <div class="card-body border-bottom py-3 d-flex flex-wrap align-items-start justify-content-between gap-2">
+        <div>
         <h2 class="h5 mb-1">Staging payments</h2>
         <p class="text-muted small mb-0">
             Showing @Model.StagingRows.Count row(s) (max 1,000) for lockbox <strong>@poBox</strong>.
@@ -108,18 +105,22 @@
                 <span>All deposit dates — use From/To above to filter.</span>
             }
         </p>
+        </div>
+        <partial name="_TableDensityToggle" />
     </div>
     @if (Model.StagingRows.Count == 0)
     {
-        <div class="card-body text-center py-5">
-            <p class="text-muted mb-2">No staging rows found for the selected filters.</p>
-            <a href="@(pathBase)/Integrations/@integration/Lockbox/LockboxFiles" class="btn btn-outline-primary btn-sm">Clear filters</a>
-        </div>
+        <partial name="_EmptyState" model='new CAHFS_Recharges.Models.CaeiEmptyState {
+            Title = "No staging rows",
+            Message = "No staging rows found for the selected filters.",
+            ActionHref = $"{pathBase}/Integrations/{integration}/Lockbox/LockboxFiles",
+            ActionText = "Clear filters"
+        }' />
     }
     else
     {
         <div class="table-responsive caei-scroll-y-400">
-            <table class="table table-hover table-sm mb-0">
+            <table class="table table-borderless caei-data-table mb-0">
                 <thead class="sticky-top bg-white">
                     <tr>
                         <th scope="col" title="LockboxNumber">Lockbox</th>
@@ -142,11 +143,12 @@
                     {
                         var statusClass = row.ValidationStatus switch
                         {
-                            "VALID" => "bg-success",
-                            "WARN" => "bg-warning text-dark",
-                            "INVALID_CUSTOMER" => "bg-danger",
-                            "ERROR" => "bg-danger",
-                            _ => "bg-secondary"
+                            "VALID" => "badge-soft-success",
+                            "WARN" => "badge-soft-warning",
+                            "INVALID_CUSTOMER" => "badge-soft-danger",
+                            "ERROR" => "badge-soft-danger",
+                            "PENDING" => "badge-soft-secondary",
+                            _ => "badge-soft-secondary"
                         };
                         <tr>
                             <td>@row.LockboxNumber</td>
@@ -155,10 +157,10 @@
                             <td>@row.SeqNumber</td>
                             <td>@row.BankNumber</td>
                             <td>@row.AccountNumber</td>
-                            <td>@row.CheckNumber</td>
+                            <td class="caei-data-key">@row.CheckNumber</td>
                             <td>@row.RemitterName</td>
                             <td class="text-end">@row.CheckAmount.ToString("N2")</td>
-                            <td>@(row.BillingId ?? "—")</td>
+                            <td class="caei-data-key">@(row.BillingId ?? "—")</td>
                             <td>@(row.AccessionFull ?? "—")</td>
                             <td>
                                 <span class="badge @statusClass">@row.ValidationStatus</span>

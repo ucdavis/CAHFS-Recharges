@@ -431,6 +431,23 @@
 
                                                 @* Actions *@
                                                 <div class="d-flex flex-wrap gap-2">
+                                                    <a asp-page-handler="DownloadPreviewJson" asp-route-batchId="@batch.BatchId"
+                                                       class="btn btn-outline-secondary"
+                                                       style="border-radius: 0.375rem;"
+                                                       title="Rebuilds the journal JSON, including GLIDE, from the current included lines. Accounting date and consumer reference are generated now.">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                                        Download preview JSON
+                                                    </a>
+                                                    @if (Model.ExpandedBatchDetail.HasStoredPayload)
+                                                    {
+                                                        <a asp-page-handler="DownloadSentJson" asp-route-batchId="@batch.BatchId"
+                                                           class="btn btn-outline-secondary"
+                                                           style="border-radius: 0.375rem;"
+                                                           title="Exact journal JSON stored when this batch was sent to Aggie Enterprise.">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                                            Download sent JSON
+                                                        </a>
+                                                    }
                                                     <a asp-page-handler="DownloadPayload" asp-route-batchId="@batch.BatchId"
                                                        class="btn btn-outline-secondary"
                                                        style="border-radius: 0.375rem;"

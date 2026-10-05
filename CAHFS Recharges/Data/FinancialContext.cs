@@ -8,6 +8,7 @@ namespace CAHFS_Recharges.Data
     {
         public virtual DbSet<FeedBatch> FeedBatches { get; set; } = null!;
         public virtual DbSet<FeedItem> FeedItems { get; set; } = null!;
+        public virtual DbSet<JournalPayload> JournalPayloads { get; set; } = null!;
         public virtual DbSet<CoaCorrectionAudit> CoaCorrectionAudits { get; set; } = null!;
         public virtual DbSet<LockboxFile> LockboxFiles { get; set; } = null!;
         public virtual DbSet<LockboxIngestRun> LockboxIngestRuns { get; set; } = null!;

@@ -18,14 +18,17 @@ namespace CAHFS_Recharges.Pages.Integrations.History
     public class SentHistoryModel : IntegrationPageModel
     {
         private readonly IIntegrationDbResolver _dbResolver;
+        private readonly AggieEnterpriseJournalUploadService _upload;
 
         public SentHistoryModel(
             IIntegrationDbResolver dbResolver,
+            AggieEnterpriseJournalUploadService upload,
             IIntegrationContextService integrationService,
             IAuthorizationService authorizationService)
             : base(integrationService, authorizationService)
         {
             _dbResolver = dbResolver;
+            _upload = upload;
         }
 
         private IntegrationType ResolvedIntegration => CurrentIntegration ?? IntegrationType.CAHFS;
@@ -237,7 +240,8 @@ namespace CAHFS_Recharges.Pages.Integrations.History
                         RequestId = batch.RequestId,
                         ErrorDetail = batch.ErrorDetail,
                         AeResponseText = batch.ErrorDetail ?? "(No response stored)",
-                        ItemErrors = itemErrors
+                        ItemErrors = itemErrors,
+                        HasStoredPayload = await _upload.HasSentPayloadAsync(batch.BatchId, ResolvedIntegration)
                     };
                 }
             }
@@ -373,6 +377,31 @@ SentAt: {batch.SentAt:yyyy-MM-dd HH:mm:ss}
 Total: {batch.BatchTotal:C}
 Error: {batch.ErrorDetail ?? "(none)"}
 ========================";
+        }
+
+        /// <summary>
+        /// Rebuilds the journal JSON from the current included lines. Accounting date and consumer reference are generated now.
+        /// </summary>
+        public async Task<IActionResult> OnGetDownloadPreviewJsonAsync(Guid batchId)
+        {
+            var json = await _upload.BuildPayloadJsonAsync(batchId, ResolvedIntegration);
+            var fileName = $"glJournalPreview_{ResolvedIntegration}_{batchId:N}.json";
+            return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
+        }
+
+        /// <summary>
+        /// Downloads the JSON stored when this batch was sent.
+        /// </summary>
+        public async Task<IActionResult> OnGetDownloadSentJsonAsync(Guid batchId)
+        {
+            var json = await _upload.TryGetLatestSentPayloadAsync(batchId, ResolvedIntegration);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return Content("No stored payload for this batch. Payloads are saved when a batch is sent.");
+            }
+
+            var fileName = $"glJournalSent_{ResolvedIntegration}_{batchId:N}.json";
+            return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
         }
 
         /// <summary>
@@ -585,6 +614,7 @@ Error: {batch.ErrorDetail ?? "(none)"}
         public Guid? RequestId { get; set; }
         public string? ErrorDetail { get; set; }
         public string? AeResponseText { get; set; }
+        public bool HasStoredPayload { get; set; }
         public List<ItemErrorViewModel> ItemErrors { get; set; } = new();
     }
 

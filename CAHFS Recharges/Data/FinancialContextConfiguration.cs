@@ -28,6 +28,16 @@ namespace CAHFS_Recharges.Data
                 entity.Property(e => e.BatchTotal).HasColumnName("batchTotal").HasColumnType("numeric(19, 2)");
             });
 
+            modelBuilder.Entity<JournalPayload>(entity =>
+            {
+                entity.ToTable("C_AE_Journal_Payload", "dbo");
+                entity.HasKey(e => e.PayloadID);
+                entity.Property(e => e.PayloadID).HasColumnName("PayloadID");
+                entity.Property(e => e.BatchID).HasColumnName("batchID").IsRequired();
+                entity.Property(e => e.SentUtc).HasColumnName("SentUtc").HasColumnType("datetime2(3)");
+                entity.Property(e => e.PayloadJson).HasColumnName("PayloadJson").HasColumnType("nvarchar(max)").IsRequired();
+            });
+
             modelBuilder.Entity<FeedItem>(entity =>
             {
                 entity.ToTable("C_AE_Feed_Items", "dbo");

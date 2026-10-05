@@ -13,6 +13,7 @@ namespace CAHFS_Recharges.Data
 
 		public DbSet<FeedBatch> FeedBatches { get; set; } = null!;
 		public DbSet<FeedItem> FeedItems { get; set; } = null!;
+		public DbSet<JournalPayload> JournalPayloads { get; set; } = null!;
 		public DbSet<CoaCorrectionAudit> CoaCorrectionAudits { get; set; } = null!;
 		public DbSet<LockboxFile> LockboxFiles { get; set; } = null!;
 		public DbSet<LockboxIngestRun> LockboxIngestRuns { get; set; } = null!;

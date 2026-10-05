@@ -12,6 +12,8 @@ namespace CAHFS_Recharges.Services
 
         DbSet<FeedItem> GetFeedItems(IntegrationType integration);
 
+        DbSet<JournalPayload> GetJournalPayloads(IntegrationType integration);
+
         DbSet<CoaCorrectionAudit> GetCoaCorrectionAudits(IntegrationType integration);
 
         DbSet<LockboxFile> GetLockboxFiles(IntegrationType integration);

@@ -102,26 +102,40 @@ namespace CAHFS_Recharges.Services
                 return "{ \"error\": \"No items found for this batch.\" }";
 
             var requestInput = BuildRequest(batch, items, integration);
+            return SerializeRequest(requestInput);
+        }
 
-            // OLD (caused manual API tests to fail if you copy/paste JSON as variables):
-            // - default serialization emits PascalCase ("Header", "Payload")
-            // - GraphQL expects camelCase ("header", "payload")
-            //
-            // var jsonOptions = new JsonSerializerOptions
-            // {
-            //     WriteIndented = true,
-            //     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-            // };
-
-            var jsonOptions = new JsonSerializerOptions
+        public async Task<bool> HasSentPayloadAsync(Guid batchId, IntegrationType integration, CancellationToken ct = default)
+        {
+            try
             {
-                WriteIndented = true,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DictionaryKeyPolicy = JsonNamingPolicy.CamelCase
-            };
+                return await _dbResolver.GetJournalPayloads(integration)
+                    .AsNoTracking()
+                    .AnyAsync(p => p.BatchID == batchId, ct);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Journal payload lookup failed for batch {BatchId}.", batchId);
+                return false;
+            }
+        }
 
-            return JsonSerializer.Serialize(requestInput, jsonOptions);
+        public async Task<string?> TryGetLatestSentPayloadAsync(Guid batchId, IntegrationType integration, CancellationToken ct = default)
+        {
+            try
+            {
+                return await _dbResolver.GetJournalPayloads(integration)
+                    .AsNoTracking()
+                    .Where(p => p.BatchID == batchId)
+                    .OrderByDescending(p => p.SentUtc)
+                    .Select(p => p.PayloadJson)
+                    .FirstOrDefaultAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Journal payload read failed for batch {BatchId}.", batchId);
+                return null;
+            }
         }
 
         // Send to AE (Gatekeep + Build + glJournalRequest mutation)
@@ -152,8 +166,10 @@ namespace CAHFS_Recharges.Services
             if (items.Count == 0)
                 return new SendResult(false, "No items found for this batch.", null);
 
-            // 3) Build request input
+            // 3) Build request input and keep the exact JSON that will be posted
             var requestInput = BuildRequest(batch, items, integration);
+            var payloadJson = SerializeRequest(requestInput);
+            await TrySaveSentPayloadAsync(batch.BatchID, payloadJson, integration, ct);
 
             // 4) Call mutation
             try
@@ -543,6 +559,44 @@ namespace CAHFS_Recharges.Services
 
         private static bool IsSuccessStatus(string token) =>
             token is "COMPLETE" or "COMPLETED" or "SUCCESS" or "PROCESSED";
+
+        private static string SerializeRequest(GlJournalRequestInput requestInput)
+        {
+            var jsonOptions = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DictionaryKeyPolicy = JsonNamingPolicy.CamelCase
+            };
+
+            return JsonSerializer.Serialize(requestInput, jsonOptions);
+        }
+
+        private async Task TrySaveSentPayloadAsync(Guid batchId, string payloadJson, IntegrationType integration, CancellationToken ct)
+        {
+            var payloads = _dbResolver.GetJournalPayloads(integration);
+            var row = new JournalPayload
+            {
+                PayloadID = Guid.NewGuid(),
+                BatchID = batchId,
+                SentUtc = DateTime.UtcNow,
+                PayloadJson = payloadJson
+            };
+            var entry = payloads.Add(row);
+
+            try
+            {
+                await _dbResolver.SaveChangesAsync(integration, ct);
+            }
+            catch (Exception ex)
+            {
+                entry.State = EntityState.Detached;
+                _log.LogWarning(ex,
+                    "Could not store journal payload for batch {BatchId}. Send will continue. Run Sql/001_C_AE_Journal_Payload.sql on this integration database.",
+                    batchId);
+            }
+        }
 
         private static string? NormalizeErrorMessages(string? err)
         {

@@ -39,6 +39,16 @@ namespace CAHFS_Recharges.Services
             };
         }
 
+        public DbSet<JournalPayload> GetJournalPayloads(IntegrationType integration)
+        {
+            return integration switch
+            {
+                IntegrationType.EQUINE => _equineContext.JournalPayloads,
+                IntegrationType.CAHFS => _cahfsContext.JournalPayloads,
+                _ => _cahfsContext.JournalPayloads
+            };
+        }
+
         public DbSet<CoaCorrectionAudit> GetCoaCorrectionAudits(IntegrationType integration)
         {
             return integration switch

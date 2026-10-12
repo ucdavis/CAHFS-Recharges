@@ -52,6 +52,8 @@
     var lockboxCheckPage = IntegrationLinkHelper.GetLockboxCheckValidationsPage(integrationType);
     var lockboxHistoryPage = IntegrationLinkHelper.GetLockboxSentHistoryPage(integrationType);
     var hiwuFilesPage = IntegrationLinkHelper.GetHiwuFilesPage(integrationType);
+    var hiwuCreatePage = IntegrationLinkHelper.GetHiwuCreatePage(integrationType);
+    var hiwuAttemptsPage = IntegrationLinkHelper.GetHiwuAttemptsPage(integrationType);
     
     // Current page for active tab detection
     var currentPath = Context.Request.Path.Value?.ToLowerInvariant() ?? "";
@@ -63,6 +65,8 @@
     var isLockboxCheck = currentPath.Contains("/lockbox/checkvalidations");
     var isLockboxHistory = currentPath.Contains("/lockbox/senthistory");
     var isHiwuFiles = currentPath.Contains("/hiwu/files");
+    var isHiwuCreate = currentPath.Contains("/hiwu/create");
+    var isHiwuAttempts = currentPath.Contains("/hiwu/attempts");
 }
 
 <header class="caei-header-wrapper @workspaceThemeClass">
@@ -137,6 +141,18 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>
                                 Manifest files
+                            </a>
+                            <a href="@(Context.Request.PathBase)@hiwuCreatePage" class="caei-nav-pill @(isHiwuCreate ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                                Create in TraceFirst
+                            </a>
+                            <a href="@(Context.Request.PathBase)@hiwuAttemptsPage" class="caei-nav-pill @(isHiwuAttempts ? "active" : "")">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                TraceFirst attempts
                             </a>
                         }
                         else if (isLockbox)

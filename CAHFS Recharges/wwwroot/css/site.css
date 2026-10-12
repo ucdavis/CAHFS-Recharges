@@ -769,6 +769,23 @@ html:not([data-caei-density="compact"]) .caei-density-toggle [data-mode="comfort
   text-decoration: none;
 }
 
+.caei-btn-outline:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 191, 0, 0.4);
+}
+
+.caei-btn-outline.caei-btn-theme {
+  color: var(--theme-primary);
+  border-color: var(--theme-primary);
+}
+
+.caei-btn-outline.caei-btn-theme:hover,
+.caei-btn-outline.caei-btn-theme:focus {
+  color: #fff;
+  background-color: var(--theme-hover);
+  border-color: var(--theme-hover);
+}
+
 .caei-btn-outline svg {
   flex-shrink: 0;
 }
@@ -1672,8 +1689,13 @@ html:not([data-caei-density="compact"]) .caei-density-toggle [data-mode="comfort
 }
 
 .staging-stat-card.staging-stat-clickable[aria-current="true"] {
-  border-color: var(--ucd-blue, #022851);
-  box-shadow: 0 0 0 1px var(--ucd-blue, #022851);
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 1px var(--theme-primary);
+}
+
+.staging-stat-card.staging-stat-clickable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 191, 0, 0.4);
 }
 
 .staging-stat-card.has-warning {
@@ -1916,6 +1938,37 @@ main thead.sticky-top {
   width: 140px;
 }
 
+/* Create in TraceFirst review: file summary stays put; accession and specimens scroll together. */
+.caei-review-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 13rem);
+  min-height: 20rem;
+}
+
+.caei-review-actions {
+  flex-shrink: 0;
+  background-color: var(--gray-50, #f9fafb);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.caei-review-file {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 767.98px) {
+  .caei-review-page {
+    height: calc(100vh - 18rem);
+  }
+}
+
 /* Scroll containers */
 .caei-scroll-y-300 {
   max-height: 300px;
@@ -1925,14 +1978,12 @@ main thead.sticky-top {
 .caei-scroll-y-400 {
   max-height: 400px;
   overflow: auto;
-  overscroll-behavior: contain;
   /* Flex children (Bootstrap .card) default min-height:auto and can ignore max-height */
   min-height: 0;
 }
 
-/* Direct scroll host inside cards — keep page height from growing with row content */
+/* Direct scroll host inside cards — cap long tables without trapping the page scroll */
 .card > .caei-scroll-y-400 {
-  height: 400px;
   max-height: 400px;
   flex-shrink: 0;
 }

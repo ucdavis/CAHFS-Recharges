@@ -16,6 +16,8 @@ namespace CAHFS_Recharges.Hiwu
 
         public DbSet<HiwuIngestRun> IngestRuns { get; set; } = null!;
 
+        public DbSet<HiwuCoflSampleRow> CoflSamples { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             HiwuContextConfiguration.Configure(modelBuilder);

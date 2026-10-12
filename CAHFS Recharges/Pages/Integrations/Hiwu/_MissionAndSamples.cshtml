@@ -10,9 +10,9 @@
         <h2 class="h5 mb-0">Mission</h2>
         <partial name="_TableDensityToggle" />
         </div>
-        <div class="table-responsive">
+        <div class="table-responsive caei-scroll-y-400">
             <table class="table table-borderless caei-data-table mb-0">
-                <thead>
+                <thead class="sticky-top bg-white">
                     <tr>
                         <th scope="col">Field</th>
                         <th scope="col">Value</th>
@@ -41,9 +41,9 @@
         <partial name="_TableDensityToggle" />
         </div>
     </div>
-    <div class="table-responsive">
+    <div class="table-responsive caei-scroll-y-400">
         <table class="table table-borderless caei-data-table mb-0">
-            <thead>
+            <thead class="sticky-top bg-white">
                 <tr>
                     @foreach (var column in Model.SampleColumns)
                     {

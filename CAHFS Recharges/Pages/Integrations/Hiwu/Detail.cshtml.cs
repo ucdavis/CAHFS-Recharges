@@ -11,14 +11,17 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
     public class DetailModel : IntegrationPageModel
     {
         private readonly HiwuReadService _readService;
+        private readonly HiwuCoflFileOrderService _orders;
 
         public DetailModel(
             IIntegrationContextService integrationService,
             IAuthorizationService authorizationService,
-            HiwuReadService readService)
+            HiwuReadService readService,
+            HiwuCoflFileOrderService orders)
             : base(integrationService, authorizationService)
         {
             _readService = readService;
+            _orders = orders;
         }
 
         [BindProperty(SupportsGet = true)]
@@ -34,6 +37,14 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
         public bool CanDownloadCsv =>
             Manifest != null && Manifest.ParseStatus is HiwuParseStatus.Received or HiwuParseStatus.Amended;
 
+        public IReadOnlyList<HiwuCoflSampleRow> TraceFirstSamples { get; private set; } = [];
+        public string? TraceFirstMessage { get; private set; }
+        public bool CanCreateOrder =>
+            Manifest != null
+            && !Manifest.IsAmendment
+            && Manifest.ParseStatus == HiwuParseStatus.Received
+            && IsOperator();
+
         public async Task<IActionResult> OnGetAsync()
         {
             var redirect = RedirectCahfs();
@@ -44,6 +55,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
             if (Manifest == null)
                 return Page();
 
+            TraceFirstSamples = await _orders.ListForFileAsync(Manifest.FileId);
             if (Manifest.ParseStatus == HiwuParseStatus.ParseError)
                 return Page();
 
@@ -65,6 +77,33 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
                     MissionCompare = document.CompareMission(original);
                     SampleCompare = document.CompareSamples(original);
                 }
+            }
+
+            return Page();
+        }
+
+        public async Task<IActionResult> OnPostCreateOrderAsync()
+        {
+            var redirect = RedirectCahfs();
+            if (redirect != null)
+                return redirect;
+            if (!IsOperator())
+                return Forbid();
+
+            Manifest = await _readService.GetFileAsync(Id);
+            if (Manifest == null)
+                return Page();
+
+            var result = await _orders.CreateOrderAsync(Manifest);
+            TraceFirstMessage = result.Message;
+            TraceFirstSamples = result.Samples.Count > 0
+                ? result.Samples
+                : await _orders.ListForFileAsync(Manifest.FileId);
+            if (Manifest.ParseStatus != HiwuParseStatus.ParseError
+                && HiwuManifestDocument.TryRead(Manifest.RawXml, out var document))
+            {
+                Document = document;
+                SampleColumns = Columns(document);
             }
 
             return Page();

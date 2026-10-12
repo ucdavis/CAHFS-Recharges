@@ -6,6 +6,21 @@
     ViewData["Title"] = "HIWU manifest files";
     var pathBase = HttpContext.Request.PathBase;
     var exportUrl = $"{pathBase}/Integrations/EQUINE/Hiwu/Files?handler=Export&fromDate={Model.FromDate:yyyy-MM-dd}&toDate={Model.ToDate:yyyy-MM-dd}&status={Uri.EscapeDataString(Model.Status ?? "")}";
+    var listReturn = "/Integrations/EQUINE/Hiwu/Files" + Request.QueryString.Value;
+    var selectedStatus = Model.Status ?? "";
+
+    string CardUrl(string? status)
+    {
+        var parts = new List<string>();
+        if (Model.FromDate.HasValue)
+            parts.Add($"FromDate={Model.FromDate:yyyy-MM-dd}");
+        if (Model.ToDate.HasValue)
+            parts.Add($"ToDate={Model.ToDate:yyyy-MM-dd}");
+        if (!string.IsNullOrWhiteSpace(status))
+            parts.Add($"Status={Uri.EscapeDataString(status)}");
+        var query = parts.Count == 0 ? "" : "?" + string.Join("&", parts);
+        return $"{pathBase}/Integrations/EQUINE/Hiwu/Files{query}";
+    }
 }
 
 <div class="d-flex justify-content-between align-items-start mb-4">
@@ -16,22 +31,46 @@
 </div>
 
 <div class="staging-stats-grid staging-stats-grid-5 mb-4" data-caei-region="summary">
-    <div class="staging-stat-card">
-        <span class="staging-stat-value">@Model.Files.Count</span>
-        <div class="staging-stat-label">Files shown</div>
-    </div>
-    <div class="staging-stat-card">
+    <a href="@CardUrl(null)" data-caei-filter-nav
+       class="staging-stat-card staging-stat-clickable"
+       aria-current="@(string.IsNullOrEmpty(selectedStatus) ? "true" : "false")"
+       aria-label="Total files (@Model.TotalCount). Show every file in this date range.">
+        <span class="staging-stat-value">@Model.TotalCount</span>
+        <div class="staging-stat-label">Total files</div>
+        <div class="staging-stat-action text-muted small">@(string.IsNullOrEmpty(selectedStatus) ? "Showing" : "Show all")</div>
+    </a>
+    <a href="@CardUrl(HiwuParseStatus.Received)" data-caei-filter-nav
+       class="staging-stat-card staging-stat-clickable @(Model.ReceivedCount > 0 ? "has-success" : "")"
+       aria-current="@(selectedStatus == HiwuParseStatus.Received ? "true" : "false")"
+       aria-label="Received (@Model.ReceivedCount). Show received files.">
         <span class="staging-stat-value">@Model.ReceivedCount</span>
         <div class="staging-stat-label">Received</div>
-    </div>
-    <div class="staging-stat-card">
+        <div class="staging-stat-action text-muted small">@(selectedStatus == HiwuParseStatus.Received ? "Showing" : "Show these")</div>
+    </a>
+    <a href="@CardUrl(HiwuParseStatus.Amended)" data-caei-filter-nav
+       class="staging-stat-card staging-stat-clickable @(Model.AmendedCount > 0 ? "has-warning" : "")"
+       aria-current="@(selectedStatus == HiwuParseStatus.Amended ? "true" : "false")"
+       aria-label="Amended (@Model.AmendedCount). Show amended files.">
         <span class="staging-stat-value">@Model.AmendedCount</span>
         <div class="staging-stat-label">Amended</div>
-    </div>
-    <div class="staging-stat-card">
+        <div class="staging-stat-action text-muted small">@(selectedStatus == HiwuParseStatus.Amended ? "Showing" : "Show these")</div>
+    </a>
+    <a href="@CardUrl(HiwuCoflSampleStatus.Imported)" data-caei-filter-nav
+       class="staging-stat-card staging-stat-clickable @(Model.ImportedCount > 0 ? "has-success" : "")"
+       aria-current="@(selectedStatus == HiwuCoflSampleStatus.Imported ? "true" : "false")"
+       aria-label="Imported (@Model.ImportedCount). Show files imported into TraceFirst.">
+        <span class="staging-stat-value">@Model.ImportedCount</span>
+        <div class="staging-stat-label">Imported</div>
+        <div class="staging-stat-action text-muted small">@(selectedStatus == HiwuCoflSampleStatus.Imported ? "Showing" : "Show these")</div>
+    </a>
+    <a href="@CardUrl(HiwuParseStatus.ParseError)" data-caei-filter-nav
+       class="staging-stat-card staging-stat-clickable @(Model.ParseErrorCount > 0 ? "has-warning" : "")"
+       aria-current="@(selectedStatus == HiwuParseStatus.ParseError ? "true" : "false")"
+       aria-label="Parse error (@Model.ParseErrorCount). Show files with a parse error.">
         <span class="staging-stat-value">@Model.ParseErrorCount</span>
         <div class="staging-stat-label">Parse error</div>
-    </div>
+        <div class="staging-stat-action text-muted small">@(selectedStatus == HiwuParseStatus.ParseError ? "Showing" : "Show these")</div>
+    </a>
 </div>
 
 <form method="get" class="caei-control-panel mb-4" aria-label="Manifest filters" data-caei-filter>
@@ -45,17 +84,8 @@
                     <label asp-for="ToDate" class="form-label">To date <span class="text-muted fw-normal">(optional)</span></label>
                     <input asp-for="ToDate" class="form-control" type="date" />
                 </div>
-                <div class="col-md-3 col-sm-6">
-                    <label asp-for="Status" class="form-label">Status</label>
-                    <select asp-for="Status" class="form-select">
-                        <option value="">All statuses</option>
-                        <option value="@HiwuParseStatus.Received">Received</option>
-                        <option value="@HiwuParseStatus.Amended">Amended</option>
-                        <option value="@HiwuParseStatus.ParseError">Parse error</option>
-                        <option value="@HiwuParseStatus.Stored">Stored</option>
-                    </select>
-                </div>
-                <div class="col-md-3 col-sm-6 d-flex gap-2 flex-wrap">
+                <input asp-for="Status" type="hidden" />
+                <div class="col-md-6 d-flex align-items-end gap-2 flex-wrap">
                 <button type="submit" class="btn btn-primary">Apply filters</button>
                 <a href="@(pathBase)/Integrations/EQUINE/Hiwu/Files" class="btn btn-outline-secondary" data-caei-filter-nav>Reset</a>
                 <a href="@exportUrl" class="btn btn-outline-secondary" data-caei-live="export">Download Excel</a>
@@ -89,6 +119,7 @@
                         <th scope="col">File name</th>
                         <th scope="col">Date downloaded</th>
                         <th scope="col">Status</th>
+                        <th scope="col">TraceFirst</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -100,9 +131,10 @@
                             HiwuParseStatus.Amended => "badge-soft-warning",
                             _ => "badge-soft-success"
                         };
+                        var traceFirstStatus = Model.TraceFirstStatus.TryGetValue(file.FileId, out var traceFirst) ? traceFirst : "Not started";
                         <tr>
                             <td class="caei-data-key">
-                                <a href="@(pathBase)@IntegrationLinkHelper.GetHiwuFileDetailPage(file.FileId)">@file.RemoteFileName</a>
+                                <a href="@(pathBase)@IntegrationLinkHelper.AppendHiwuReturn(IntegrationLinkHelper.GetHiwuFileDetailPage(file.FileId), listReturn)">@file.RemoteFileName</a>
                             </td>
                             <td>@FilesModel.ToPacific(file.ReceivedUtc).ToString("yyyy-MM-dd HH:mm")</td>
                             <td>
@@ -122,6 +154,7 @@
                                     @HiwuParseStatus.Label(file.ParseStatus)
                                 </span>
                             </td>
+                            <td><span class="badge @HiwuCoflSampleStatus.BadgeClass(traceFirstStatus)">@traceFirstStatus</span></td>
                         </tr>
                     }
                 </tbody>

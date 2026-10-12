@@ -47,5 +47,8 @@ namespace CAHFS_Recharges.Hiwu
         public string Username { get; set; } = "";
 
         public string Password { get; set; } = "";
+
+        /// HIWU panel code to the TraceFirst test_schedule id for this environment.
+        public Dictionary<string, long> TestScheduleIds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 }

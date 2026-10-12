@@ -37,6 +37,16 @@ namespace CAHFS_Recharges.Hiwu
                     .OnDelete(DeleteBehavior.NoAction)
                     .HasConstraintName("FK_C_HIWU_Import_File_Original");
             });
+
+            modelBuilder.Entity<HiwuCoflSampleRow>(entity =>
+            {
+                entity.ToTable("C_HIWU_Cofl_Sample", "dbo");
+                entity.HasKey(e => new { e.FileId, e.SampleKey }).HasName("PK_C_HIWU_Cofl_Sample");
+                entity.Property(e => e.SampleKey).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.ErrorMessage).HasMaxLength(500);
+                entity.Property(e => e.UpdatedUtc).HasColumnType("datetime2(3)");
+            });
         }
     }
 }

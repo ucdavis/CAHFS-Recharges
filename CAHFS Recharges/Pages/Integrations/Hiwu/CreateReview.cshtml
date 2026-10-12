@@ -1,0 +1,108 @@
+@page "/Integrations/{integration}/Hiwu/Create/Review"
+@model CAHFS_Recharges.Pages.Integrations.Hiwu.CreateReviewModel
+@using CAHFS_Recharges.Hiwu
+@using CAHFS_Recharges.Services
+@{
+    ViewData["Title"] = "Create in TraceFirst";
+    var pathBase = HttpContext.Request.PathBase;
+    var file = Model.Manifest;
+    var review = Model.Review;
+    var listReturn = IntegrationLinkHelper.HiwuReturnPath(Request.Query["back"], "/Integrations/EQUINE/Hiwu/Create");
+    var backLabel = listReturn.StartsWith("/Integrations/EQUINE/Hiwu/Files/Detail", StringComparison.OrdinalIgnoreCase)
+        ? "Back to file"
+        : listReturn.StartsWith("/Integrations/EQUINE/Hiwu/Files", StringComparison.OrdinalIgnoreCase)
+            ? "Back to files"
+            : "Back to create";
+}
+
+@if (file == null)
+{
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+        <h1 class="h3 mb-0">Create in TraceFirst</h1>
+        <a class="caei-btn-outline caei-btn-theme" href="@(pathBase)@listReturn" aria-label="@backLabel">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            @backLabel
+        </a>
+    </div>
+    <div class="alert alert-warning" role="alert">This file was not found.</div>
+}
+else if (review != null)
+{
+    <div class="caei-review-page">
+        <div class="caei-review-actions">
+            <div class="mb-2">
+                <a class="caei-btn-outline caei-btn-theme" href="@(pathBase)@listReturn" aria-label="@backLabel">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                    @backLabel
+                </a>
+            </div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <h1 class="h3 mb-0">@file.RemoteFileName</h1>
+                    <span class="badge @HiwuCoflSampleStatus.BadgeClass(review.TraceFirstStatus)">@review.TraceFirstStatus</span>
+                </div>
+                @if (review.CanSubmit && Model.IsOperatorUser)
+                {
+                    <form method="post" asp-page-handler="CreateOrder" asp-route-id="@file.FileId" asp-route-integration="EQUINE" asp-route-back="@Request.Query["back"]" class="mb-0">
+                        <button type="submit" class="btn btn-primary">@review.ButtonLabel</button>
+                    </form>
+                }
+                else if (review.CanSubmit)
+                {
+                    <p class="mb-0">Creating the TraceFirst order requires an operator.</p>
+                }
+            </div>
+            @if (!string.IsNullOrEmpty(Model.ResultMessage))
+            {
+                <div class="alert alert-info" role="status">@Model.ResultMessage</div>
+            }
+            @if (!string.IsNullOrEmpty(review.BlockReason))
+            {
+                <div class="alert alert-warning" role="alert">@review.BlockReason</div>
+            }
+            @if (!string.IsNullOrEmpty(review.Confirmation))
+            {
+                <p class="mb-0">@review.Confirmation</p>
+            }
+        </div>
+        <div class="caei-review-file" tabindex="0" aria-label="File data">
+            @if (review.Accession.Count > 0)
+            {
+                <div class="card mb-3">
+                    <div class="card-body border-bottom py-3 d-flex flex-wrap align-items-start justify-content-between gap-2">
+                        <h2 class="h5 mb-0">Accession</h2>
+                        <partial name="_TableDensityToggle" />
+                    </div>
+                    <div class="card-body">
+                        <partial name="_TraceFirstMap" model="review.Accession" />
+                    </div>
+                </div>
+            }
+
+            @foreach (var sample in review.Samples)
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h2 class="h5 mb-2"><span class="caei-data-key">@sample.SampleKey</span></h2>
+                        <p class="mb-2">
+                            <span class="badge @HiwuCoflSampleStatus.BadgeClass(sample.Status)">@sample.Status</span>
+                        </p>
+                        <p class="mb-2">
+                            Accession <span class="caei-data-key">@(sample.AccessionNumber ?? sample.AccessionId?.ToString() ?? "—")</span>,
+                            animal <span class="caei-data-key">@HiwuCoflSampleRow.Display(sample.AnimalLabel, sample.AnimalId)</span>,
+                            specimen <span class="caei-data-key">@HiwuCoflSampleRow.Display(sample.SpecimenLabel, sample.SpecimenId)</span>
+                        </p>
+                        @if (!string.IsNullOrEmpty(sample.ErrorMessage))
+                        {
+                            <div class="alert alert-warning mb-3" role="alert">@sample.ErrorMessage</div>
+                        }
+                        @if (sample.Lines.Count > 0)
+                        {
+                            <partial name="_TraceFirstMap" model="sample.Lines" />
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}

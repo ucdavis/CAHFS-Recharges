@@ -1,0 +1,96 @@
+@page "/Integrations/{integration}/Hiwu/Create"
+@model CAHFS_Recharges.Pages.Integrations.Hiwu.CreateModel
+@using CAHFS_Recharges.Hiwu
+@using CAHFS_Recharges.Services
+@{
+    ViewData["Title"] = "Create in TraceFirst";
+    var pathBase = HttpContext.Request.PathBase;
+    var listReturn = "/Integrations/EQUINE/Hiwu/Create" + Request.QueryString.Value;
+}
+
+<div class="mb-4">
+    <h1 class="h3 mb-1">Create in TraceFirst</h1>
+    <p class="text-muted mb-0">Received files that are not in TraceFirst yet, or only partly created.</p>
+</div>
+
+<form method="get" class="caei-control-panel mb-4" aria-label="Create in TraceFirst filters">
+    <h2 class="h6 mb-3">Filters</h2>
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3 col-sm-6">
+            <label class="form-label" for="FileName">File name</label>
+            <input asp-for="FileName" class="form-control" />
+        </div>
+        <div class="col-md-5 col-sm-6">
+            <fieldset>
+                <legend class="form-label">TraceFirst</legend>
+                <div class="d-flex flex-wrap gap-3">
+                    <div class="form-check mb-0">
+                        <input asp-for="NotStarted" class="form-check-input" />
+                        <label class="form-check-label" for="NotStarted">Not started</label>
+                    </div>
+                    <div class="form-check mb-0">
+                        <input asp-for="ShowPartial" class="form-check-input" />
+                        <label class="form-check-label" for="ShowPartial">Partial</label>
+                    </div>
+                    <div class="form-check mb-0">
+                        <input asp-for="Failed" class="form-check-input" />
+                        <label class="form-check-label" for="Failed">Failed</label>
+                    </div>
+                </div>
+            </fieldset>
+        </div>
+        <div class="col-md-4 d-flex align-items-end gap-2 flex-wrap">
+            <button type="submit" class="btn btn-primary">Apply filters</button>
+            <a href="@(pathBase)/Integrations/EQUINE/Hiwu/Create" class="btn btn-outline-secondary">Reset</a>
+        </div>
+    </div>
+</form>
+
+<div class="card mb-3">
+    <div class="card-body border-bottom py-3 d-flex flex-wrap align-items-start justify-content-between gap-2">
+        <div>
+        <h2 class="h5 mb-1">Files to create</h2>
+        <p class="text-muted small mb-0">Showing @Model.Items.Count file(s), up to 200 of the latest received files.</p>
+        </div>
+        <partial name="_TableDensityToggle" />
+    </div>
+    @if (Model.Items.Count == 0)
+    {
+        <partial name="_EmptyState" model='new CAHFS_Recharges.Models.CaeiEmptyState {
+            Title = "No files are waiting",
+            Message = "No received files match these filters.",
+            ActionHref = $"{pathBase}/Integrations/EQUINE/Hiwu/Create",
+            ActionText = "Clear filters"
+        }' />
+    }
+    else
+    {
+        <div class="table-responsive caei-scroll-y-400">
+            <table class="table table-borderless caei-data-table mb-0">
+                <thead class="sticky-top bg-white">
+                    <tr>
+                        <th scope="col">File</th>
+                        <th scope="col">Downloaded</th>
+                        <th scope="col">Samples</th>
+                        <th scope="col">TraceFirst</th>
+                        <th scope="col">Next step</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Items)
+                    {
+                        <tr>
+                            <td>
+                                <a class="caei-data-key" href="@(pathBase)@IntegrationLinkHelper.AppendHiwuReturn($"/Integrations/EQUINE/Hiwu/Create/Review?id={item.FileId:D}", listReturn)">@item.FileName</a>
+                            </td>
+                            <td>@CreateModel.ToPacific(item.ReceivedUtc).ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@item.SampleCount</td>
+                            <td><span class="badge @HiwuCoflSampleStatus.BadgeClass(item.TraceFirstStatus)">@item.TraceFirstStatus</span></td>
+                            <td>@item.NextStep</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

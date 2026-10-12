@@ -73,7 +73,12 @@
             var fresh = doc.querySelector('form[data-caei-filter][aria-label="' + CSS.escape(label) + '"]');
             if (!fresh) return;
             fresh.querySelectorAll("input, select, textarea").forEach(function (field) {
-                if (!field.name || field.type === "submit" || field.type === "button" || field.type === "hidden") return;
+                if (!field.name || field.type === "submit" || field.type === "button") return;
+                if (field.type === "hidden") {
+                    var hidden = form.querySelector('input[type="hidden"][name="' + CSS.escape(field.name) + '"]');
+                    if (hidden) hidden.value = field.value;
+                    return;
+                }
                 var current = form.querySelector('[name="' + CSS.escape(field.name) + '"]');
                 if (!current) return;
                 if (current.type === "checkbox" || current.type === "radio") current.checked = field.checked;

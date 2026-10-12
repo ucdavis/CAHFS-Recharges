@@ -290,6 +290,9 @@ try
         client.Timeout = TimeSpan.FromSeconds(seconds > 0 ? seconds : 30);
     });
     builder.Services.AddSingleton<HiwuCoflClient>();
+    builder.Services.AddSingleton<HiwuCoflCatalogCache>();
+    builder.Services.AddSingleton<HiwuCoflOrderService>();
+    builder.Services.AddScoped<HiwuCoflFileOrderService>();
 
     // Integration Context
     builder.Services.AddScoped<IIntegrationContextService, IntegrationContextService>();

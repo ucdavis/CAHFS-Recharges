@@ -49,7 +49,7 @@ else if (review != null)
                 }
                 else if (review.CanSubmit)
                 {
-                    <p class="mb-0">Creating the TraceFirst order requires an operator.</p>
+                    <p class="mb-0">Creating the TraceFirst order requires an operator. Signed in as @(User.Identity?.Name ?? "unknown").</p>
                 }
             </div>
             @if (!string.IsNullOrEmpty(Model.ResultMessage))

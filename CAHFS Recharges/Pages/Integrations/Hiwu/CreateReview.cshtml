@@ -43,8 +43,9 @@ else if (review != null)
                 </div>
                 @if (review.CanSubmit && Model.IsOperatorUser)
                 {
-                    <form method="post" asp-page-handler="CreateOrder" asp-route-id="@file.FileId" asp-route-integration="EQUINE" asp-route-back="@Request.Query["back"]" class="mb-0">
+                    <form method="post" asp-page-handler="CreateOrder" asp-route-id="@file.FileId" asp-route-integration="EQUINE" asp-route-back="@Request.Query["back"]" class="mb-0 d-flex flex-column align-items-end gap-2">
                         <button type="submit" class="btn btn-primary">@review.ButtonLabel</button>
+                        <p class="caei-form-wait mb-0" role="status" hidden>Creating the accession. Please wait.</p>
                     </form>
                 }
                 else if (review.CanSubmit)

@@ -58,7 +58,7 @@ namespace CAHFS_Recharges.Hiwu
             if (WantsSpecimen(order.Operation) && specimenId == null)
             {
                 var specimen = order.Specimen! with { AnimalId = animalId ?? order.Specimen.AnimalId };
-                var call = await _client.CreateSpecimenAsync(specimen, cancellationToken);
+                var call = await _client.CreateSpecimenAsync(specimen, accessionId ?? 0, cancellationToken);
                 var step = ToStep("Specimen", call, requireId: true);
                 steps.Add(step);
                 if (!step.Succeeded)
@@ -105,7 +105,11 @@ namespace CAHFS_Recharges.Hiwu
                     var step = ToStep("Animal" + label, call, requireId: true);
                     steps.Add(step);
                     if (!step.Succeeded)
+                    {
+                        if (IsRateLimit(step.ErrorMessage))
+                            break;
                         continue;
+                    }
                     animalId = step.ResourceId;
                 }
 
@@ -114,11 +118,15 @@ namespace CAHFS_Recharges.Hiwu
                 if (specimenId == null)
                 {
                     var specimen = sample.Specimen! with { AnimalId = animalId.Value };
-                    var call = await _client.CreateSpecimenAsync(specimen, cancellationToken);
+                    var call = await _client.CreateSpecimenAsync(specimen, accessionId ?? 0, cancellationToken);
                     var step = ToStep("Specimen" + label, call, requireId: true);
                     steps.Add(step);
                     if (!step.Succeeded)
+                    {
+                        if (IsRateLimit(step.ErrorMessage))
+                            break;
                         continue;
+                    }
                     specimenId = step.ResourceId;
                 }
 
@@ -127,7 +135,10 @@ namespace CAHFS_Recharges.Hiwu
                     continue;
 
                 var tests = await _client.AssignTestsAsync(specimenId.Value, sample.TestScheduleIds, cancellationToken);
-                steps.Add(ToStep("Tests" + label, tests, requireId: false));
+                var testStep = ToStep("Tests" + label, tests, requireId: false);
+                steps.Add(testStep);
+                if (!testStep.Succeeded && IsRateLimit(testStep.ErrorMessage))
+                    break;
             }
 
             return Finish(steps, accessionId, animalIds, specimenIds);
@@ -180,6 +191,9 @@ namespace CAHFS_Recharges.Hiwu
                 Steps = steps
             };
         }
+
+        private static bool IsRateLimit(string? message) =>
+            message != null && message.Contains("rate limit", StringComparison.OrdinalIgnoreCase);
 
         private static HiwuCoflStepResult ToStep(string step, HiwuCoflCallResult call, bool requireId)
         {

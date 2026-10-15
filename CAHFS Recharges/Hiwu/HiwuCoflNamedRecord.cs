@@ -12,6 +12,8 @@ namespace CAHFS_Recharges.Hiwu
         public long? TestId { get; init; }
         public long? LabId { get; init; }
         public bool IsTestSchedule { get; init; }
+        public bool Archived { get; init; }
+        public bool Deleted { get; init; }
         public IReadOnlyList<string> Names { get; init; } = [];
 
         public HiwuCoflNamedRecord WithNames(IEnumerable<string> extra)
@@ -33,6 +35,8 @@ namespace CAHFS_Recharges.Hiwu
                 TestId = TestId,
                 LabId = LabId,
                 IsTestSchedule = IsTestSchedule,
+                Archived = Archived,
+                Deleted = Deleted,
                 Names = names
             };
         }
@@ -201,6 +205,8 @@ namespace CAHFS_Recharges.Hiwu
                     TestId = pair.Value.TestId,
                     LabId = pair.Value.LabId,
                     IsTestSchedule = pair.Value.IsTestSchedule,
+                    Archived = pair.Value.Archived,
+                    Deleted = pair.Value.Deleted,
                     Names = pair.Value.Names
                 }).ToList();
             }
@@ -287,7 +293,10 @@ namespace CAHFS_Recharges.Hiwu
             }
 
             if (TryId(element, "test_id", out var testId))
+            {
                 fields.TestId = testId;
+                fields.IsTestSchedule = true;
+            }
             else if (element.TryGetProperty("test", out var test)
                 && test.ValueKind == JsonValueKind.Object
                 && TryId(test, out var nestedTestId))
@@ -295,6 +304,10 @@ namespace CAHFS_Recharges.Hiwu
 
             if (TryId(element, "lab_id", out var labId))
                 fields.LabId = labId;
+            if (IsFlagSet(element, "archived"))
+                fields.Archived = true;
+            if (IsFlagSet(element, "mark_as_deleted"))
+                fields.Deleted = true;
 
             if (TryId(element, "parent_id", out var parentId))
                 fields.ParentId = parentId;
@@ -318,6 +331,20 @@ namespace CAHFS_Recharges.Hiwu
             return TryId(element, "tag_type_id", out id);
         }
 
+        private static bool IsFlagSet(JsonElement element, string name)
+        {
+            if (!element.TryGetProperty(name, out var property))
+                return false;
+            if (property.ValueKind == JsonValueKind.True)
+                return true;
+            if (property.ValueKind == JsonValueKind.Number && property.TryGetInt64(out var number))
+                return number != 0;
+            if (property.ValueKind != JsonValueKind.String)
+                return false;
+            var text = property.GetString()?.Trim();
+            return text is "1" or "true" or "yes";
+        }
+
         private static bool TryId(JsonElement element, out long id) => TryId(element, "id", out id);
 
         private static bool TryId(JsonElement element, string name, out long id)
@@ -339,6 +366,8 @@ namespace CAHFS_Recharges.Hiwu
             public long? TestId { get; set; }
             public long? LabId { get; set; }
             public bool IsTestSchedule { get; set; }
+            public bool Archived { get; set; }
+            public bool Deleted { get; set; }
             public List<string> Names { get; } = [];
         }
     }

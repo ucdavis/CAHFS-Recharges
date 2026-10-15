@@ -35,9 +35,11 @@ namespace CAHFS_Recharges.Hiwu
         private readonly IOptions<HiwuOptions> _options;
         private readonly ILogger<HiwuCoflClient> _logger;
         private readonly SemaphoreSlim _refreshLock = new(1, 1);
+        private readonly SemaphoreSlim _postLock = new(1, 1);
         private readonly object _accessionNumberLock = new();
         private readonly Dictionary<long, string> _accessionNumbers = new();
         private HiwuCoflSession? _session;
+        private DateTime _nextPostUtc;
 
         public HiwuCoflClient(
             IHttpClientFactory httpClientFactory,
@@ -418,6 +420,26 @@ namespace CAHFS_Recharges.Hiwu
             return string.IsNullOrEmpty(nestedText) ? null : nestedText;
         }
 
+        public async Task<long?> FindUnassignedAnimalIdAsync(
+            long accessionId,
+            string? name,
+            IReadOnlySet<long> usedIds,
+            CancellationToken cancellationToken = default)
+        {
+            if (accessionId <= 0 || string.IsNullOrWhiteSpace(name))
+                return null;
+
+            var animals = await LoadAnimalsAsync(accessionId, name.Trim(), cancellationToken);
+            foreach (var animal in animals)
+            {
+                if (animal.Id == 0 || usedIds.Contains(animal.Id) || animal.Empty == false)
+                    continue;
+                return animal.Id;
+            }
+
+            return null;
+        }
+
         public async Task<HiwuCoflCallResult> CreateAnimalAsync(
             HiwuCoflAnimalRequest request,
             CancellationToken cancellationToken = default)
@@ -426,52 +448,207 @@ namespace CAHFS_Recharges.Hiwu
             if (request.AccessionId <= 0)
                 throw new ArgumentException("Animal requires an accession id.");
 
-            if (request.Tags.Count == 0)
-            {
-                return await PostWithFallbackAsync(
-                    "api/v2/animals",
-                    new AnimalBody(request, tagsAsAttributes: true),
-                    "api/v1/accessions/new_animal",
-                    new AnimalEnvelope(new AnimalBody(request, tagsAsAttributes: false)),
-                    cancellationToken);
-            }
+            return await PostAnimalAsync(request, cancellationToken);
+        }
 
-            var v1 = await PostAsync(
+        private async Task<HiwuCoflCallResult> PostAnimalAsync(
+            HiwuCoflAnimalRequest request,
+            CancellationToken cancellationToken)
+        {
+            var response = await PostAsync(
                 "api/v1/accessions/new_animal",
                 new AnimalEnvelope(new AnimalBody(request, tagsAsAttributes: false)),
                 cancellationToken);
-            if (v1.Status is HttpStatusCode.OK or HttpStatusCode.Created
-                || (!IsAccessDenied(v1.Status) && !IsMissingRoute(v1.Status, v1.Body)))
-                return ToResult(v1, "v1");
+            var result = ToResult(response, "v1");
+            if (!result.Succeeded)
+                return result;
 
-            _logger.LogInformation(
-                "HIWU COFL v1 call api/v1/accessions/new_animal was not accepted with status {StatusCode}. Trying v2.",
-                (int)v1.Status);
-            var v2 = await PostAsync(
-                "api/v2/animals",
-                new AnimalBody(request, tagsAsAttributes: true),
-                cancellationToken);
-            return ToResult(v2, "v2");
+            var animalId = ReadAnimalId(response.Body, request.AccessionId, request.Name) ?? result.ResourceId;
+            if (animalId == null || animalId == request.AccessionId)
+            {
+                return new HiwuCoflCallResult
+                {
+                    Succeeded = false,
+                    StatusCode = result.StatusCode,
+                    ApiVersion = result.ApiVersion,
+                    ErrorMessage = "TraceFirst did not return an animal id.",
+                    ResponseBody = result.ResponseBody
+                };
+            }
+
+            return new HiwuCoflCallResult
+            {
+                Succeeded = true,
+                StatusCode = result.StatusCode,
+                ApiVersion = result.ApiVersion,
+                ResourceId = animalId,
+                ResponseBody = result.ResponseBody
+            };
         }
 
-        public Task<HiwuCoflCallResult> CreateSpecimenAsync(
+        private async Task<List<AnimalMatch>> LoadAnimalsAsync(long accessionId, string name, CancellationToken cancellationToken)
+        {
+            var listed = await GetBodyAsync(
+                "api/v2/animals?per_page=100&accession_id=" + accessionId + "&search=" + Uri.EscapeDataString(name),
+                cancellationToken);
+            return listed.Ok && !string.IsNullOrWhiteSpace(listed.Body)
+                ? ReadAnimals(listed.Body, accessionId, name)
+                : [];
+        }
+
+        private async Task<(bool Ok, string Body)> GetBodyAsync(string relativePath, CancellationToken cancellationToken)
+        {
+            using var request = await CreateRequestAsync(HttpMethod.Get, relativePath, cancellationToken);
+            var client = _httpClientFactory.CreateClient(HttpClientName);
+            using var response = await client.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            return (response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created, body);
+        }
+
+        private static HiwuCoflCallResult ExistingAnimal(long id) =>
+            new()
+            {
+                Succeeded = true,
+                StatusCode = (int)HttpStatusCode.OK,
+                ApiVersion = "v1",
+                ResourceId = id
+            };
+
+        private readonly record struct AnimalMatch(long Id, bool? Empty);
+
+        private static List<AnimalMatch> ReadAnimals(string body, long accessionId, string name)
+        {
+            var found = new List<AnimalMatch>();
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                Walk(document.RootElement);
+            }
+            catch (JsonException)
+            {
+                return found;
+            }
+
+            return found;
+
+            void Walk(JsonElement element)
+            {
+                if (element.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in element.EnumerateArray())
+                        Walk(item);
+                    return;
+                }
+
+                if (element.ValueKind != JsonValueKind.Object)
+                    return;
+
+                var specimen = element.TryGetProperty("specimen_type_id", out _) || element.TryGetProperty("specimen_type", out _);
+                var otherAccession = TryReadLong(element, "accession_id", out var ownerId) && ownerId != accessionId;
+                if (!specimen && !otherAccession && AnimalNameMatches(element, name) && TryReadId(element, out var id) && found.All(animal => animal.Id != id))
+                    found.Add(new AnimalMatch(id, SpecimenEmpty(element)));
+
+                foreach (var property in element.EnumerateObject())
+                {
+                    if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+                        Walk(property.Value);
+                }
+            }
+        }
+
+        private static bool AnimalNameMatches(JsonElement element, string name)
+        {
+            if (string.Equals(ReadJsonString(element, "name"), name, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(ReadJsonString(element, "num"), name, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            foreach (var listName in new[] { "animal_tags", "tags", "animal_tags_attributes" })
+            {
+                if (!element.TryGetProperty(listName, out var tags) || tags.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var tag in tags.EnumerateArray())
+                {
+                    if (tag.ValueKind == JsonValueKind.Object
+                        && string.Equals(ReadJsonString(tag, "num"), name, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool? SpecimenEmpty(JsonElement animal)
+        {
+            if (TrySpecimenArray(animal, "specimens", out var specimens) || TrySpecimenArray(animal, "specimens_attributes", out specimens))
+                return specimens.GetArrayLength() == 0;
+
+            if (animal.TryGetProperty("relationships", out var relationships)
+                && relationships.ValueKind == JsonValueKind.Object
+                && relationships.TryGetProperty("specimens", out var related)
+                && related.ValueKind == JsonValueKind.Object
+                && TrySpecimenArray(related, "data", out specimens))
+                return specimens.GetArrayLength() == 0;
+
+            return null;
+        }
+
+        private static bool TrySpecimenArray(JsonElement element, string name, out JsonElement array)
+        {
+            if (element.TryGetProperty(name, out array) && array.ValueKind == JsonValueKind.Array)
+                return true;
+
+            if (element.TryGetProperty("attributes", out var attributes)
+                && attributes.ValueKind == JsonValueKind.Object
+                && attributes.TryGetProperty(name, out array)
+                && array.ValueKind == JsonValueKind.Array)
+                return true;
+
+            array = default;
+            return false;
+        }
+
+        public async Task<HiwuCoflCallResult> CreateSpecimenAsync(
             HiwuCoflSpecimenRequest request,
+            long accessionId,
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(request);
             if (request.AnimalId <= 0)
                 throw new ArgumentException("Specimen requires an animal id.");
 
-            var body = new SpecimenBody(request);
-            return PostWithFallbackAsync(
-                "api/v2/specimens",
-                body,
+            var response = await PostAsync(
                 "api/v1/accessions/new_specimen",
-                new SpecimenEnvelope(body),
+                new SpecimenEnvelope(new SpecimenBody(request)),
                 cancellationToken);
+            var result = ToResult(response, "v1");
+            if (!result.Succeeded)
+                return result;
+
+            var specimenId = ReadSpecimenId(response.Body, request.AnimalId, accessionId) ?? result.ResourceId;
+            if (specimenId == null || specimenId == request.AnimalId || (accessionId > 0 && specimenId == accessionId))
+            {
+                return new HiwuCoflCallResult
+                {
+                    Succeeded = false,
+                    StatusCode = result.StatusCode,
+                    ApiVersion = result.ApiVersion,
+                    ErrorMessage = "TraceFirst did not return a specimen id.",
+                    ResponseBody = result.ResponseBody
+                };
+            }
+
+            return new HiwuCoflCallResult
+            {
+                Succeeded = true,
+                StatusCode = result.StatusCode,
+                ApiVersion = result.ApiVersion,
+                ResourceId = specimenId,
+                ResponseBody = result.ResponseBody
+            };
         }
 
-        public Task<HiwuCoflCallResult> AssignTestsAsync(
+        public async Task<HiwuCoflCallResult> AssignTestsAsync(
             long specimenId,
             IReadOnlyList<long> testScheduleIds,
             CancellationToken cancellationToken = default)
@@ -481,12 +658,25 @@ namespace CAHFS_Recharges.Hiwu
             if (testScheduleIds == null || testScheduleIds.Count == 0 || testScheduleIds.Any(id => id <= 0))
                 throw new ArgumentException("At least one test schedule id is required.");
 
-            return PostWithFallbackAsync(
-                "api/v2/order_messaging/order_tests",
-                new TestOrderBody(specimenId, testScheduleIds),
+            _logger.LogInformation(
+                "HIWU COFL assigning tests to specimen {SpecimenId}: {ScheduleIds}.",
+                specimenId,
+                string.Join(',', testScheduleIds));
+            var response = await PostAsync(
                 "api/v1/accessions/add_tests_to_specimen",
                 new TestOrderV1Body(specimenId, testScheduleIds),
                 cancellationToken);
+            var result = ToResult(response, "v1");
+            if (result.Succeeded || !IsAlreadyAssigned(result.ErrorMessage))
+                return result;
+
+            return new HiwuCoflCallResult
+            {
+                Succeeded = true,
+                StatusCode = result.StatusCode,
+                ApiVersion = result.ApiVersion,
+                ResponseBody = result.ResponseBody
+            };
         }
 
         private async Task<HiwuCoflCallResult> PostWithFallbackAsync(
@@ -497,7 +687,7 @@ namespace CAHFS_Recharges.Hiwu
             CancellationToken cancellationToken)
         {
             var v2 = await PostAsync(v2Path, v2Payload, cancellationToken);
-            if (v2.Status is HttpStatusCode.OK or HttpStatusCode.Created)
+            if (v2.Status is HttpStatusCode.OK or HttpStatusCode.Created || IsRateLimited(v2.Status, v2.Body))
                 return ToResult(v2, "v2");
             if (!IsMissingRoute(v2.Status, v2.Body) && !IsAccessDenied(v2.Status))
                 return ToResult(v2, "v2");
@@ -544,23 +734,38 @@ namespace CAHFS_Recharges.Hiwu
             object payload,
             CancellationToken cancellationToken)
         {
-            using var request = await CreateRequestAsync(HttpMethod.Post, relativePath, cancellationToken);
-            request.Content = JsonContent.Create(payload, options: JsonOptions);
-            var client = _httpClientFactory.CreateClient(HttpClientName);
-            using var response = await client.SendAsync(request, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            return (response.StatusCode, body);
+            await _postLock.WaitAsync(cancellationToken);
+            try
+            {
+                var wait = _nextPostUtc - DateTime.UtcNow;
+                if (wait > TimeSpan.Zero)
+                    await Task.Delay(wait, cancellationToken);
+
+                using var request = await CreateRequestAsync(HttpMethod.Post, relativePath, cancellationToken);
+                request.Content = JsonContent.Create(payload, options: JsonOptions);
+                var client = _httpClientFactory.CreateClient(HttpClientName);
+                using var response = await client.SendAsync(request, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                _nextPostUtc = DateTime.UtcNow.AddMilliseconds(IsRateLimited(response.StatusCode, body) ? 5000 : 400);
+                return (response.StatusCode, body);
+            }
+            finally
+            {
+                _postLock.Release();
+            }
         }
 
         private HiwuCoflCallResult ToResult((HttpStatusCode Status, string Body) response, string apiVersion)
         {
             var succeeded = response.Status is HttpStatusCode.OK or HttpStatusCode.Created;
+            var error = succeeded ? null : ReadError(response.Body, (int)response.Status);
             if (!succeeded)
             {
                 _logger.LogWarning(
-                    "HIWU COFL {ApiVersion} call failed with status {StatusCode}.",
+                    "HIWU COFL {ApiVersion} call failed with status {StatusCode}: {Error}",
                     apiVersion,
-                    (int)response.Status);
+                    (int)response.Status,
+                    error);
             }
 
             return new HiwuCoflCallResult
@@ -569,7 +774,7 @@ namespace CAHFS_Recharges.Hiwu
                 StatusCode = (int)response.Status,
                 ApiVersion = apiVersion,
                 ResourceId = succeeded ? ReadResourceId(response.Body) : null,
-                ErrorMessage = succeeded ? null : ReadError(response.Body, (int)response.Status),
+                ErrorMessage = error,
                 ResponseBody = response.Body
             };
         }
@@ -651,6 +856,10 @@ namespace CAHFS_Recharges.Hiwu
             }
         }
 
+        private static bool IsRateLimited(HttpStatusCode status, string? body) =>
+            status == HttpStatusCode.TooManyRequests
+            || (body != null && body.Contains("rate limit", StringComparison.OrdinalIgnoreCase));
+
         private static bool IsAccessDenied(HttpStatusCode status) =>
             status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
 
@@ -665,6 +874,127 @@ namespace CAHFS_Recharges.Hiwu
             return body.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase)
                 || body.Contains("does not exist", StringComparison.OrdinalIgnoreCase)
                 || body.Contains("<html", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static long? ReadAnimalId(string body, long accessionId, string? tagNum)
+        {
+            if (string.IsNullOrWhiteSpace(body))
+                return null;
+
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                long? found = null;
+                Walk(document.RootElement);
+                return found;
+
+                void Walk(JsonElement element)
+                {
+                    if (element.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in element.EnumerateArray())
+                            Walk(item);
+                        return;
+                    }
+
+                    if (element.ValueKind != JsonValueKind.Object)
+                        return;
+
+                    var isSpecimen = element.TryGetProperty("specimen_type_id", out _)
+                        || element.TryGetProperty("specimen_type", out _);
+                    var isTag = element.TryGetProperty("tag_type_id", out _);
+                    var isAnimal = !isTag && (
+                        element.TryGetProperty("breed_id", out _)
+                        || element.TryGetProperty("sex_code_id", out _)
+                        || element.TryGetProperty("animal_tags", out _)
+                        || element.TryGetProperty("animal_tags_attributes", out _));
+                    if (!isSpecimen
+                        && isAnimal
+                        && TryReadId(element, out var id)
+                        && id != accessionId
+                        && id != 0
+                        && (string.IsNullOrWhiteSpace(tagNum) || HasTagNum(element, tagNum))
+                        && (found == null || id < found))
+                        found = id;
+
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+                            Walk(property.Value);
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        private static bool HasTagNum(JsonElement element, string tagNum)
+        {
+            foreach (var name in new[] { "animal_tags", "animal_tags_attributes" })
+            {
+                if (!element.TryGetProperty(name, out var tags) || tags.ValueKind != JsonValueKind.Array)
+                    continue;
+                foreach (var tag in tags.EnumerateArray())
+                {
+                    if (tag.ValueKind != JsonValueKind.Object || !tag.TryGetProperty("num", out var num))
+                        continue;
+                    var value = num.ValueKind == JsonValueKind.String ? num.GetString() : num.ToString();
+                    if (string.Equals(value?.Trim(), tagNum, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsAlreadyAssigned(string? message) =>
+            message != null && (
+                message.Contains("already", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("taken", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("duplicate", StringComparison.OrdinalIgnoreCase));
+
+        private static long? ReadSpecimenId(string body, long animalId, long accessionId)
+        {
+            if (string.IsNullOrWhiteSpace(body))
+                return null;
+
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                long? found = null;
+                Walk(document.RootElement);
+                return found;
+
+                void Walk(JsonElement element)
+                {
+                    if (element.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in element.EnumerateArray())
+                            Walk(item);
+                        return;
+                    }
+
+                    if (element.ValueKind != JsonValueKind.Object)
+                        return;
+
+                    var isSpecimen = element.TryGetProperty("specimen_type_id", out _)
+                        || element.TryGetProperty("specimen_type", out _);
+                    if (isSpecimen && TryReadId(element, out var id) && id != animalId && id != accessionId && id != 0)
+                        found = id;
+
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+                            Walk(property.Value);
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
 
         private static long? ReadResourceId(string body)
@@ -737,18 +1067,18 @@ namespace CAHFS_Recharges.Hiwu
         {
             if (element.ValueKind == JsonValueKind.Object)
             {
-                if (TryReadLong(element, "id", out var id))
-                    return id;
-
-                foreach (var name in new[] { "accession", "animal", "specimen" })
+                foreach (var name in new[] { "animal", "specimen", "data" })
                 {
-                    if (element.TryGetProperty(name, out var child))
+                    if (element.TryGetProperty(name, out var child) && child.ValueKind == JsonValueKind.Object)
                     {
                         var nested = FindId(child);
                         if (nested != null)
                             return nested;
                     }
                 }
+
+                if (TryReadLong(element, "id", out var id))
+                    return id;
             }
 
             return null;
@@ -987,6 +1317,8 @@ namespace CAHFS_Recharges.Hiwu
                     AnimalTagsAttributes = tags;
                 else
                     AnimalTags = tags;
+                if (tags != null)
+                    Name = null;
             }
 
             public long AccessionId { get; }
@@ -1000,7 +1332,11 @@ namespace CAHFS_Recharges.Hiwu
             public bool? Insured { get; }
             public string? Name { get; }
             public bool? NonAnimal { get; }
+
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public List<AnimalTagBody>? AnimalTags { get; }
+
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public List<AnimalTagBody>? AnimalTagsAttributes { get; }
         }
 
@@ -1215,7 +1551,7 @@ namespace CAHFS_Recharges.Hiwu
             public TestOrderV1Body(long specimenId, IReadOnlyList<long> testScheduleIds)
             {
                 SpecimenId = specimenId;
-                TestScheduleIds = string.Join(",", testScheduleIds);
+                TestScheduleIds = string.Join(',', testScheduleIds);
             }
 
             public long SpecimenId { get; }

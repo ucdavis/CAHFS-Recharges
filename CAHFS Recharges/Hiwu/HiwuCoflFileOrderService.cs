@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,7 @@ namespace CAHFS_Recharges.Hiwu
         private readonly HiwuCoflCatalogCache _catalogs;
         private readonly HiwuCoflOrderService _orders;
         private readonly HiwuCoflClient _client;
+        private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> FileOrders = new();
         private readonly Dictionary<long, string?> _accessionNumbers = new();
 
         public HiwuCoflFileOrderService(
@@ -141,6 +143,20 @@ namespace CAHFS_Recharges.Hiwu
 
         public async Task<HiwuCoflFileOrderResult> CreateOrderAsync(HiwuImportFile file, CancellationToken cancellationToken = default)
         {
+            var gate = FileOrders.GetOrAdd(file.FileId, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                return await CreateOrderCoreAsync(file, cancellationToken);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        private async Task<HiwuCoflFileOrderResult> CreateOrderCoreAsync(HiwuImportFile file, CancellationToken cancellationToken)
+        {
             if (file.IsAmendment || file.ParseStatus == HiwuParseStatus.Amended)
             {
                 return new HiwuCoflFileOrderResult
@@ -217,77 +233,156 @@ namespace CAHFS_Recharges.Hiwu
             }
 
             var accessionId = saved.Select(row => row.AccessionId).FirstOrDefault(id => id != null);
-            var order = new HiwuCoflOrder
-            {
-                Operation = HiwuCoflOperation.CreateOrder,
-                AccessionId = accessionId,
-                Accession = accessionId == null
-                    ? new HiwuCoflAccessionRequest
-                    {
-                        LabId = catalog.LabId!.Value,
-                        ClientId = catalog.ClientId!.Value,
-                        CarrierId = catalog.MatchCarrier(Field(document.Mission, "courier")),
-                        CarrierRefNum = EmptyToNull(Field(document.Mission, "trackingRef")),
-                        AdditionalInfo = EmptyToNull(AdditionalInfo(document))
-                    }
-                    : null,
-                Samples = samples
-            };
-
-            var result = await _orders.ExecuteAsync(order, cancellationToken);
-            var now = DateTime.UtcNow;
-            foreach (var sample in samples)
-            {
-                var row = saved.FirstOrDefault(item => item.SampleKey == sample.SampleKey);
-                if (row == null)
+            var accession = accessionId == null
+                ? new HiwuCoflAccessionRequest
                 {
-                    row = new HiwuCoflSampleRow { FileId = file.FileId, SampleKey = sample.SampleKey! };
-                    _db.CoflSamples.Add(row);
+                    LabId = catalog.LabId!.Value,
+                    ClientId = catalog.ClientId!.Value,
+                    CarrierId = catalog.MatchCarrier(Field(document.Mission, "courier")),
+                    CarrierRefNum = EmptyToNull(Field(document.Mission, "trackingRef")),
+                    AdditionalInfo = EmptyToNull(AdditionalInfo(document))
+                }
+                : null;
+
+            string? failure = null;
+            var anyFailed = false;
+            var anySucceeded = false;
+            var rateWaits = new[] { TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5) };
+            var rateAttempt = 0;
+            for (var index = 0; index < samples.Count; index++)
+            {
+                var sample = samples[index];
+                var prior = saved.FirstOrDefault(row => row.SampleKey == sample.SampleKey);
+                if (prior != null)
+                    sample = ContinueFrom(sample, prior);
+                if (sample.AnimalId == null && accessionId != null)
+                {
+                    var usedIds = saved
+                        .Where(row => row.AnimalId != null)
+                        .Select(row => row.AnimalId!.Value)
+                        .ToHashSet();
+                    var existingId = await _client.FindUnassignedAnimalIdAsync(
+                        accessionId.Value,
+                        sample.Animal?.Name ?? sample.Animal?.Tags.FirstOrDefault()?.Num,
+                        usedIds,
+                        cancellationToken);
+                    if (existingId != null)
+                        sample = WithAnimal(sample, existingId.Value);
                 }
 
-                var label = " " + sample.SampleKey;
-                var animalStep = result.Steps.FirstOrDefault(step => step.Step == "Animal" + label);
-                var specimenStep = result.Steps.FirstOrDefault(step => step.Step == "Specimen" + label);
-                var testStep = result.Steps.FirstOrDefault(step => step.Step == "Tests" + label);
-                row.AccessionId = result.AccessionId ?? row.AccessionId;
-                row.AnimalId = animalStep?.ResourceId ?? sample.AnimalId ?? row.AnimalId;
-                row.SpecimenId = specimenStep?.ResourceId ?? sample.SpecimenId ?? row.SpecimenId;
-                row.UpdatedUtc = now;
-                if (result.AccessionId == null)
+                var result = await _orders.ExecuteAsync(new HiwuCoflOrder
                 {
-                    row.Status = HiwuCoflSampleStatus.Failed;
-                    row.ErrorMessage = result.ErrorMessage;
+                    Operation = HiwuCoflOperation.CreateOrder,
+                    AccessionId = accessionId,
+                    Accession = accessionId == null ? accession : null,
+                    Samples = [sample]
+                }, cancellationToken);
+
+                accessionId = result.AccessionId ?? accessionId;
+                ApplySampleResult(file.FileId, saved, sample, result);
+                await _db.SaveChangesAsync(cancellationToken);
+
+                anyFailed |= result.Status != HiwuCoflOrderResult.Completed;
+                anySucceeded |= result.Steps.Any(step => step.Succeeded) || result.Status == HiwuCoflOrderResult.Completed;
+                if (result.Status != HiwuCoflOrderResult.Completed && !string.IsNullOrWhiteSpace(result.ErrorMessage))
+                    failure = result.ErrorMessage;
+                if (IsRateLimit(result.ErrorMessage) || result.Steps.Any(step => IsRateLimit(step.ErrorMessage)))
+                {
+                    if (rateAttempt >= rateWaits.Length)
+                        break;
+                    await Task.Delay(rateWaits[rateAttempt], cancellationToken);
+                    rateAttempt++;
+                    index--;
                     continue;
                 }
 
-                row.ErrorMessage = animalStep is { Succeeded: false }
-                    ? animalStep.ErrorMessage
-                    : specimenStep is { Succeeded: false }
-                        ? specimenStep.ErrorMessage
-                        : testStep is { Succeeded: false } ? testStep.ErrorMessage : null;
-                var testsRequired = sample.TestScheduleIds.Count > 0;
-                row.Status = row.SpecimenId != null && (!testsRequired || testStep is { Succeeded: true })
-                    ? HiwuCoflSampleStatus.Imported
-                    : row.AnimalId != null || row.SpecimenId != null
-                        ? HiwuCoflSampleStatus.Partial
-                        : HiwuCoflSampleStatus.Failed;
-                if (row.Status == HiwuCoflSampleStatus.Imported && !testsRequired)
-                    row.ErrorMessage = "Tests were not assigned for this collection point.";
+                rateAttempt = 0;
             }
 
-            await _db.SaveChangesAsync(cancellationToken);
             var savedRows = await ListForFileAsync(file.FileId, cancellationToken);
             var accessionNumber = savedRows.Select(row => row.AccessionNumber).FirstOrDefault(number => !string.IsNullOrWhiteSpace(number))
-                ?? result.AccessionId?.ToString();
+                ?? accessionId?.ToString();
+            var status = anyFailed
+                ? anySucceeded ? HiwuCoflOrderResult.Partial : HiwuCoflOrderResult.Failed
+                : HiwuCoflOrderResult.Completed;
             return new HiwuCoflFileOrderResult
             {
-                Status = result.Status,
-                Message = result.Status == HiwuCoflOrderResult.Completed
+                Status = status,
+                Message = status == HiwuCoflOrderResult.Completed
                     ? "The file was created in TraceFirst. Accession " + accessionNumber + "."
-                    : result.ErrorMessage ?? "TraceFirst did not finish this file.",
+                    : failure ?? "TraceFirst did not finish this file.",
                 Samples = savedRows
             };
         }
+
+        private void ApplySampleResult(
+            Guid fileId,
+            List<HiwuCoflSampleRow> saved,
+            HiwuCoflOrderSample sample,
+            HiwuCoflOrderResult result)
+        {
+            var row = saved.FirstOrDefault(item => item.SampleKey == sample.SampleKey);
+            if (row == null)
+            {
+                row = new HiwuCoflSampleRow { FileId = fileId, SampleKey = sample.SampleKey! };
+                saved.Add(row);
+                _db.CoflSamples.Add(row);
+            }
+
+            var label = " " + sample.SampleKey;
+            var animalStep = result.Steps.FirstOrDefault(step => step.Step == "Animal" + label);
+            var specimenStep = result.Steps.FirstOrDefault(step => step.Step == "Specimen" + label);
+            var testStep = result.Steps.FirstOrDefault(step => step.Step == "Tests" + label);
+            row.AccessionId = result.AccessionId ?? row.AccessionId;
+            row.AnimalId = animalStep?.ResourceId ?? sample.AnimalId ?? row.AnimalId;
+            row.SpecimenId = specimenStep?.ResourceId ?? sample.SpecimenId ?? row.SpecimenId;
+            row.UpdatedUtc = DateTime.UtcNow;
+            if (result.AccessionId == null)
+            {
+                row.Status = HiwuCoflSampleStatus.Failed;
+                row.ErrorMessage = result.ErrorMessage;
+                return;
+            }
+
+            row.ErrorMessage = animalStep is { Succeeded: false }
+                ? animalStep.ErrorMessage
+                : specimenStep is { Succeeded: false }
+                    ? specimenStep.ErrorMessage
+                    : testStep is { Succeeded: false } ? testStep.ErrorMessage : null;
+            var testsRequired = sample.TestScheduleIds.Count > 0;
+            row.Status = row.SpecimenId != null && (!testsRequired || testStep is { Succeeded: true })
+                ? HiwuCoflSampleStatus.Imported
+                : row.AnimalId != null || row.SpecimenId != null
+                    ? HiwuCoflSampleStatus.Partial
+                    : HiwuCoflSampleStatus.Failed;
+            if (row.Status == HiwuCoflSampleStatus.Imported && !testsRequired)
+                row.ErrorMessage = "Tests were not assigned for this collection point.";
+        }
+
+        private static HiwuCoflOrderSample WithAnimal(HiwuCoflOrderSample sample, long animalId) =>
+            new()
+            {
+                SampleKey = sample.SampleKey,
+                AnimalId = animalId,
+                Animal = null,
+                SpecimenId = sample.SpecimenId,
+                Specimen = sample.SpecimenId == null ? sample.Specimen : null,
+                TestScheduleIds = sample.TestScheduleIds
+            };
+
+        private static HiwuCoflOrderSample ContinueFrom(HiwuCoflOrderSample sample, HiwuCoflSampleRow row) =>
+            new()
+            {
+                SampleKey = sample.SampleKey,
+                AnimalId = row.AnimalId,
+                Animal = row.AnimalId == null ? sample.Animal : null,
+                SpecimenId = row.SpecimenId,
+                Specimen = row.SpecimenId == null ? sample.Specimen : null,
+                TestScheduleIds = sample.TestScheduleIds
+            };
+
+        private static bool IsRateLimit(string? message) =>
+            message != null && message.Contains("rate limit", StringComparison.OrdinalIgnoreCase);
 
         private async Task FillAccessionNumbersAsync(IReadOnlyList<HiwuCoflSampleRow> rows, CancellationToken cancellationToken)
         {

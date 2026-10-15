@@ -28,6 +28,7 @@
     <script src="~/js/caei-keys.js" asp-append-version="true" defer></script>
 </head>
 <body class="@themeClass">
+    <div id="global-progress-bar" class="caei-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Processing" aria-hidden="true"></div>
     <a href="#main-content" class="visually-hidden-focusable">Skip to main content</a>
     
     @await Html.PartialAsync("_Header")

@@ -47,13 +47,17 @@ namespace CAHFS_Recharges.Hiwu
                 {
                     if (resolved.TryGetValue(code, out var configured) && configured > 0)
                         continue;
-                    if (MatchCode(schedules, code) != null)
+                    var listed = MatchCode(schedules, code);
+                    if (listed != null)
+                    {
+                        resolved[code] = ToScheduleId(schedules, listed.Value);
                         continue;
+                    }
 
                     ScheduleLongNames.TryGetValue(code, out var longName);
                     var id = await client.FindTestScheduleIdAsync(code, longName, cancellationToken);
                     if (id != null)
-                        resolved[code] = id.Value;
+                        resolved[code] = ToScheduleId(schedules, id.Value);
                 }
             }
 
@@ -79,10 +83,19 @@ namespace CAHFS_Recharges.Hiwu
         public long? MatchPanel(string code)
         {
             if (ScheduleIds.TryGetValue(code, out var configured) && configured > 0)
-                return configured;
+                return ToScheduleId(TestSchedules, configured);
 
             var marked = TestSchedules.Where(record => record.IsTestSchedule).ToList();
-            return MatchCode(marked, code) ?? MatchCode(TestSchedules, code);
+            var matched = MatchCode(marked, code) ?? MatchCode(TestSchedules, code);
+            return matched == null ? null : ToScheduleId(TestSchedules, matched.Value);
+        }
+
+        private static long ToScheduleId(IReadOnlyList<HiwuCoflNamedRecord> records, long id)
+        {
+            var schedules = records.Where(record => record.TestId == id && !record.Archived && !record.Deleted).ToList();
+            if (schedules.Count == 0)
+                return id;
+            return schedules.OrderBy(record => record.Id).First().Id;
         }
 
         private static async Task<IReadOnlyList<HiwuCoflNamedRecord>> ListAsync(

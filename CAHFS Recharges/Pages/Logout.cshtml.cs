@@ -1,3 +1,4 @@
+using CAHFS_Recharges.Models;
 using CAHFS_Recharges.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -29,10 +30,20 @@ namespace CAHFS_Recharges.Pages
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
+            var cookiePath = HttpHelper.CookiePath(Request);
+            var secure = Request.IsHttps;
+
             // Belt-and-suspenders: expire the named auth cookie even if SignOut missed a path match.
+            // Under PathBase the auth cookie is scoped to /caei-test; also clear Path="/" for older cookies.
             Response.Cookies.Delete(
                 "CAHFSRecharge.Authentication.UCD",
-                new CookieOptions { Secure = true, SameSite = SameSiteMode.Lax, Path = "/" });
+                new CookieOptions { Secure = secure, SameSite = SameSiteMode.Lax, Path = cookiePath });
+            if (cookiePath != "/")
+            {
+                Response.Cookies.Delete(
+                    "CAHFSRecharge.Authentication.UCD",
+                    new CookieOptions { Secure = secure, SameSite = SameSiteMode.Lax, Path = "/" });
+            }
 
             _integrationContext.ClearIntegrationCookie(HttpContext);
             _integrationContext.ClearProductFamilyCookie(HttpContext);
@@ -43,11 +54,11 @@ namespace CAHFS_Recharges.Pages
                 new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
+                    Secure = secure,
                     SameSite = SameSiteMode.Strict,
                     MaxAge = TimeSpan.FromMinutes(15),
                     IsEssential = true,
-                    Path = "/"
+                    Path = cookiePath
                 });
 
             return RedirectToPage("/Login", new { SignedOut = true, ReturnUrl = GetSafeReturnUrl() });
@@ -56,12 +67,12 @@ namespace CAHFS_Recharges.Pages
         private string GetSafeReturnUrl()
         {
             if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
-                return ReturnUrl;
+                return HttpHelper.WithPathBase(Request, ReturnUrl);
 
             if (!string.IsNullOrEmpty(Request.Query["ReturnUrl"]) && Url.IsLocalUrl(Request.Query["ReturnUrl"]))
-                return Request.Query["ReturnUrl"].ToString();
+                return HttpHelper.WithPathBase(Request, Request.Query["ReturnUrl"].ToString());
 
-            return "/Home";
+            return HttpHelper.WithPathBase(Request, "/Home");
         }
     }
 }

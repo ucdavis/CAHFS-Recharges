@@ -389,6 +389,9 @@ namespace CAHFS_Recharges.Services
 
                 var udfTestCode = SafeTrim(i.TestCode, 50);
                 var udfTestName = SafeTrim(i.TestName, 50);
+                // Accession# / FolderNo = first 8 chars of Original Doc #; Submitter ID = clientID
+                var udfFolderNo = SafeTrim(FolderNoFromDocNumber(i.OrignalDocNumber), 50);
+                var udfSubmitterId = SafeTrim(i.ClientID, 50);
 
                 var desc = BuildLineDescription(i, integration); // max 100
 
@@ -420,7 +423,9 @@ namespace CAHFS_Recharges.Services
                         UdfNumeric3 = udfTotal,
 
                         UdfString1 = udfTestCode,
-                        UdfString2 = udfTestName
+                        UdfString2 = udfTestName,
+                        UdfString3 = udfFolderNo,
+                        UdfString4 = udfSubmitterId
                     }
                 };
 
@@ -448,10 +453,20 @@ namespace CAHFS_Recharges.Services
                         UdfNumeric3 = udfTotal,
 
                         UdfString1 = udfTestCode,
-                        UdfString2 = udfTestName
+                        UdfString2 = udfTestName,
+                        UdfString3 = udfFolderNo,
+                        UdfString4 = udfSubmitterId
                     }
                 };
             }
+        }
+
+        /// <summary>FolderNo / Accession# is the first 8 characters of Original Doc #.</summary>
+        private static string? FolderNoFromDocNumber(string? docNumber)
+        {
+            var s = (docNumber ?? string.Empty).Trim();
+            if (s.Length == 0) return null;
+            return s.Length <= 8 ? s : s.Substring(0, 8);
         }
 
         // Segment Helpers

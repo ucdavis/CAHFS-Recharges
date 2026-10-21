@@ -24,7 +24,7 @@ namespace CAHFS_Recharges.Services
             var authz = httpContext.RequestServices.GetService<IAuthorizationService>();
             if (authz == null)
             {
-                httpContext.Response.Redirect(pathBase + "/Denied?reason=hangfire");
+                httpContext.Response.Redirect(pathBase + "/AccessDenied?reason=hangfire");
                 return false;
             }
 
@@ -32,7 +32,7 @@ namespace CAHFS_Recharges.Services
             
             if (!result.Succeeded)
             {
-                httpContext.Response.Redirect(pathBase + "/Denied?reason=hangfire");
+                httpContext.Response.Redirect(pathBase + "/AccessDenied?reason=hangfire");
                 return false;
             }
 

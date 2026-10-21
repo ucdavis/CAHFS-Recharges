@@ -247,7 +247,7 @@ namespace CAHFS_Recharges.Hiwu
             string? failure = null;
             var anyFailed = false;
             var anySucceeded = false;
-            var rateWaits = new[] { TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5) };
+            var rateWaits = new[] { TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15) };
             var rateAttempt = 0;
             for (var index = 0; index < samples.Count; index++)
             {
@@ -458,9 +458,9 @@ namespace CAHFS_Recharges.Hiwu
             if (location.Length > 0)
                 parts.Add("Location: " + location + ".");
             if (shipped.Length > 0)
-                parts.Add("DateShipped: " + ReportDate(shipped));
+                parts.Add("Date Shipped: " + ReportDate(shipped) + ".");
             if (lockNumber.Length > 0)
-                parts.Add("ContainerLockNum: " + lockNumber);
+                parts.Add("Container Lock Num: " + lockNumber + ".");
             return string.Join(" ", parts);
         }
 

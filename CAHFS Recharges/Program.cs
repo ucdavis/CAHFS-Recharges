@@ -6,6 +6,7 @@ using CAHFS_Recharges.Data;
 using CAHFS_Recharges.Middleware;
 using CAHFS_Recharges.Models;
 using CAHFS_Recharges.Models.Options;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.Extensions.Options;
 using CAHFS_Recharges.Services;
 using CAHFS_Recharges.Hiwu;
@@ -66,13 +67,20 @@ try
     }
 
     // Add services to the container.
+    builder.Services.AddScoped<WorkspaceAccessPageFilter>();
     builder.Services.AddRazorPages(options =>
     {
-        options.Conventions.AuthorizeFolder("/");
+        options.Conventions.AuthorizeFolder("/", CaeiPolicies.AppUserPolicy);
         options.Conventions.AllowAnonymousToPage("/Login");
+        options.Conventions.AllowAnonymousToPage("/Logout");
         options.Conventions.AllowAnonymousToPage("/CasLogin");
         options.Conventions.AllowAnonymousToPage("/Error");
         options.Conventions.AllowAnonymousToPage("/Denied");
+        options.Conventions.AllowAnonymousToPage("/AccessDenied");
+    })
+    .AddMvcOptions(options =>
+    {
+        options.Filters.AddService<WorkspaceAccessPageFilter>();
     });
 
     builder.Host.UseNLog();
@@ -106,18 +114,32 @@ try
         {
             options.Cookie.Name = "CAHFSRecharge.Authentication.UCD";
             options.LoginPath = new PathString("/Login");
-            options.AccessDeniedPath = new PathString("/Denied");
+            options.AccessDeniedPath = new PathString("/AccessDenied");
             options.ExpireTimeSpan = TimeSpan.FromHours(12);
         });
 
     // CAS settings
     builder.Services.Configure<CasSettings>(builder.Configuration.GetSection("Cas"));
 
+    // AWS / appsettings Authorization contract (Admins, Operators, Viewers, ProductFamilies, Labs)
+    builder.Services.Configure<CaeiAuthorizationOptions>(
+        builder.Configuration.GetSection(CaeiAuthorizationOptions.SectionName));
+
+    builder.Services.AddSingleton<ICaeiRoleResolver, CaeiRoleResolver>();
+    builder.Services.AddSingleton<ICaeiCapabilityService, CaeiCapabilityService>();
+    builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, CaeiAuthorizationMiddlewareResultHandler>();
+
     // Authorization policies
     builder.Services.AddAuthorization(options =>
     {
         // Legacy policy (kept for backwards compatibility)
         options.AddPolicy("CAHFSUser", policy => policy.RequireClaim(ClaimTypes.AuthenticationMethod, "CAS"));
+
+        // Layer 0: must be on Admins, Operators, or Viewers (fail closed — no implicit Viewer)
+        options.AddPolicy(CaeiPolicies.AppUserPolicy, policy =>
+            policy.RequireAuthenticatedUser()
+                  .RequireClaim(ClaimTypes.AuthenticationMethod, "CAS")
+                  .AddRequirements(new RoleRequirement(CaeiRoles.Viewer)));
 
         // CAEI role-based policies
         options.AddPolicy(CaeiPolicies.ViewerPolicy, policy =>
@@ -134,15 +156,12 @@ try
 
         options.DefaultPolicy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
-            .AddRequirements(new AuthorizationPolicyBuilder()
-                .RequireClaim(ClaimTypes.AuthenticationMethod, "CAS")
-                .Build()
-                .Requirements
-                .ToArray())
+            .RequireClaim(ClaimTypes.AuthenticationMethod, "CAS")
+            .AddRequirements(new RoleRequirement(CaeiRoles.Viewer))
             .Build();
     });
 
-    // Role-based authorization handler
+    // Role-based authorization handler (uses ICaeiRoleResolver)
     builder.Services.AddSingleton<IAuthorizationHandler, ConfigBasedRoleHandler>();
 
     // CSP nonces
@@ -293,6 +312,7 @@ try
     builder.Services.AddSingleton<HiwuCoflCatalogCache>();
     builder.Services.AddSingleton<HiwuCoflOrderService>();
     builder.Services.AddScoped<HiwuCoflFileOrderService>();
+    builder.Services.AddScoped<HiwuResultsReportService>();
 
     // Integration Context
     builder.Services.AddScoped<IIntegrationContextService, IntegrationContextService>();

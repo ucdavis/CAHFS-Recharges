@@ -27,6 +27,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
 
         public IReadOnlyList<HiwuImportFile> Files { get; private set; } = Array.Empty<HiwuImportFile>();
         public IReadOnlyDictionary<Guid, string> TraceFirstStatus { get; private set; } = new Dictionary<Guid, string>();
+        public IReadOnlyDictionary<Guid, HiwuReviewProgress> ReviewProgress { get; private set; } = new Dictionary<Guid, HiwuReviewProgress>();
 
         [BindProperty(SupportsGet = true)]
         public DateTime? FromDate { get; set; }
@@ -65,8 +66,11 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
             sheet.Cell(1, 1).Value = "File name";
             sheet.Cell(1, 2).Value = "Date downloaded";
             sheet.Cell(1, 3).Value = "Status";
+            var amendedExport = string.Equals(Status, HiwuParseStatus.Amended, StringComparison.OrdinalIgnoreCase);
             sheet.Cell(1, 4).Value = "TraceFirst";
-            var header = sheet.Range(1, 1, 1, 4);
+            if (amendedExport)
+                sheet.Cell(1, 5).Value = "Reviewed";
+            var header = sheet.Range(1, 1, 1, amendedExport ? 5 : 4);
             header.Style.Font.Bold = true;
             header.Style.Fill.BackgroundColor = XLColor.LightGray;
 
@@ -77,6 +81,8 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
                 sheet.Cell(row, 2).Value = ToPacific(file.ReceivedUtc).ToString("yyyy-MM-dd HH:mm");
                 sheet.Cell(row, 3).Value = HiwuParseStatus.Label(file.ParseStatus);
                 sheet.Cell(row, 4).Value = traceFirst.TryGetValue(file.FileId, out var traceStatus) ? traceStatus : "Not started";
+                if (amendedExport)
+                    sheet.Cell(row, 5).Value = ReviewProgress.TryGetValue(file.FileId, out var reviewed) ? reviewed.Label : "";
                 row++;
             }
 
@@ -101,20 +107,48 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
                 statuses.TryGetValue(file.FileId, out var traceFirst)
                 && traceFirst == HiwuCoflSampleStatus.Imported);
 
+            IReadOnlyList<HiwuImportFile> shown;
             if (string.IsNullOrWhiteSpace(Status))
-                return (all, statuses);
-            if (string.Equals(Status, HiwuCoflSampleStatus.Imported, StringComparison.OrdinalIgnoreCase))
+                shown = all;
+            else if (string.Equals(Status, HiwuCoflSampleStatus.Imported, StringComparison.OrdinalIgnoreCase))
             {
-                var imported = all
+                shown = all
                     .Where(file => statuses.TryGetValue(file.FileId, out var traceFirst) && traceFirst == HiwuCoflSampleStatus.Imported)
                     .ToList();
-                return (imported, statuses);
+            }
+            else
+            {
+                shown = all
+                    .Where(file => string.Equals(file.ParseStatus, Status, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
             }
 
-            var matched = all
-                .Where(file => string.Equals(file.ParseStatus, Status, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            return (matched, statuses);
+            ReviewProgress = string.Equals(Status, HiwuParseStatus.Amended, StringComparison.OrdinalIgnoreCase)
+                ? await ReviewLabelsAsync(shown)
+                : new Dictionary<Guid, HiwuReviewProgress>();
+            return (shown, statuses);
+        }
+
+        private async Task<IReadOnlyDictionary<Guid, HiwuReviewProgress>> ReviewLabelsAsync(IReadOnlyList<HiwuImportFile> files)
+        {
+            var amended = files.Where(file => file.ParseStatus == HiwuParseStatus.Amended).ToList();
+            if (amended.Count == 0)
+                return new Dictionary<Guid, HiwuReviewProgress>();
+
+            var counts = await _readService.CountSampleReviewsAsync(amended.Select(file => file.FileId).ToList());
+            var labels = new Dictionary<Guid, HiwuReviewProgress>();
+            foreach (var file in amended)
+            {
+                var total = 0;
+                if (HiwuManifestDocument.TryRead(file.RawXml, out var document))
+                    total = document.Samples.Count(sample => !string.IsNullOrEmpty(sample.SampleId));
+                var reviewed = counts.TryGetValue(file.FileId, out var count) ? count : 0;
+                if (reviewed > total)
+                    reviewed = total;
+                labels[file.FileId] = new HiwuReviewProgress(reviewed, total);
+            }
+
+            return labels;
         }
 
         public static DateTime ToPacific(DateTime utc)
@@ -122,6 +156,12 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
             var value = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
             var zone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
             return TimeZoneInfo.ConvertTimeFromUtc(value, zone);
+        }
+
+        public sealed record HiwuReviewProgress(int Reviewed, int Total)
+        {
+            public string Label => Reviewed + " of " + Total + " reviewed";
+            public bool Complete => Total > 0 && Reviewed == Total;
         }
 
         private IActionResult? RedirectCahfs()

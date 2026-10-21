@@ -8,6 +8,7 @@
     var exportUrl = $"{pathBase}/Integrations/EQUINE/Hiwu/Files?handler=Export&fromDate={Model.FromDate:yyyy-MM-dd}&toDate={Model.ToDate:yyyy-MM-dd}&status={Uri.EscapeDataString(Model.Status ?? "")}";
     var listReturn = "/Integrations/EQUINE/Hiwu/Files" + Request.QueryString.Value;
     var selectedStatus = Model.Status ?? "";
+    var showReviewed = string.Equals(selectedStatus, HiwuParseStatus.Amended, StringComparison.OrdinalIgnoreCase);
 
     string CardUrl(string? status)
     {
@@ -120,6 +121,10 @@
                         <th scope="col">Date downloaded</th>
                         <th scope="col">Status</th>
                         <th scope="col">TraceFirst</th>
+                        @if (showReviewed)
+                        {
+                            <th scope="col">Reviewed</th>
+                        }
                     </tr>
                 </thead>
                 <tbody>
@@ -155,6 +160,20 @@
                                 </span>
                             </td>
                             <td><span class="badge @HiwuCoflSampleStatus.BadgeClass(traceFirstStatus)">@traceFirstStatus</span></td>
+                            @if (showReviewed)
+                            {
+                                <td>
+                                    @if (Model.ReviewProgress.TryGetValue(file.FileId, out var reviewed))
+                                    {
+                                        var reviewClass = reviewed.Complete ? "badge-soft-success" : "badge-soft-warning";
+                                        <span class="badge @reviewClass">@reviewed.Label</span>
+                                    }
+                                    else
+                                    {
+                                        <span>—</span>
+                                    }
+                                </td>
+                            }
                         </tr>
                     }
                 </tbody>

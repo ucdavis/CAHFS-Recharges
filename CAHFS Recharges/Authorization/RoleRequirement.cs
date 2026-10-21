@@ -22,8 +22,12 @@ namespace CAHFS_Recharges.Authorization
 
     public static class CaeiPolicies
     {
+        /// Layer 0: authenticated CAS user on Admins, Operators, or Viewers.
+        public const string AppUserPolicy = "AppUserPolicy";
+
         public const string ViewerPolicy = "ViewerPolicy";
         public const string OperatorPolicy = "OperatorPolicy";
         public const string AdminPolicy = "AdminPolicy";
     }
 }
+

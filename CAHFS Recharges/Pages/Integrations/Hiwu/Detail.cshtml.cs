@@ -12,26 +12,34 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
     {
         private readonly HiwuReadService _readService;
         private readonly HiwuCoflFileOrderService _orders;
+        private readonly HiwuResultsReportService _reports;
 
         public DetailModel(
             IIntegrationContextService integrationService,
             IAuthorizationService authorizationService,
             HiwuReadService readService,
-            HiwuCoflFileOrderService orders)
+            HiwuCoflFileOrderService orders,
+            HiwuResultsReportService reports)
             : base(integrationService, authorizationService)
         {
             _readService = readService;
             _orders = orders;
+            _reports = reports;
         }
 
         [BindProperty(SupportsGet = true)]
         public Guid Id { get; set; }
+
+        [BindProperty]
+        public string SampleKey { get; set; } = "";
 
         public HiwuImportFile? Manifest { get; private set; }
         public HiwuManifestDocument? Document { get; private set; }
         public HiwuManifestDocument? OriginalDocument { get; private set; }
         public IReadOnlyList<HiwuFieldCompare> MissionCompare { get; private set; } = Array.Empty<HiwuFieldCompare>();
         public IReadOnlyList<HiwuSampleCompare> SampleCompare { get; private set; } = Array.Empty<HiwuSampleCompare>();
+        public IReadOnlyDictionary<string, HiwuSampleReview> SampleReviews { get; private set; } =
+            new Dictionary<string, HiwuSampleReview>(StringComparer.Ordinal);
         public IReadOnlyList<string> SampleColumns { get; private set; } = Array.Empty<string>();
         public bool OriginalMissing { get; private set; }
         public bool CanDownloadCsv =>
@@ -39,10 +47,17 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
 
         public IReadOnlyList<HiwuCoflSampleRow> TraceFirstSamples { get; private set; } = [];
         public string? TraceFirstMessage { get; private set; }
+        public HiwuReportView? Report { get; private set; }
         public bool CanCreateOrder =>
             Manifest != null
             && !Manifest.IsAmendment
             && Manifest.ParseStatus == HiwuParseStatus.Received
+            && IsOperator();
+
+        public bool CanReviewSamples =>
+            Manifest != null
+            && Manifest.IsAmendment
+            && OriginalDocument != null
             && IsOperator();
 
         public async Task<IActionResult> OnGetAsync()
@@ -56,6 +71,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
                 return Page();
 
             TraceFirstSamples = await _orders.ListForFileAsync(Manifest.FileId);
+            Report = await _reports.GetViewAsync(Manifest.FileId);
             if (Manifest.ParseStatus == HiwuParseStatus.ParseError)
                 return Page();
 
@@ -76,6 +92,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
                     OriginalDocument = original;
                     MissionCompare = document.CompareMission(original);
                     SampleCompare = document.CompareSamples(original);
+                    SampleReviews = await _readService.ListSampleReviewsAsync(Manifest.FileId);
                 }
             }
 
@@ -99,6 +116,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
             TraceFirstSamples = result.Samples.Count > 0
                 ? result.Samples
                 : await _orders.ListForFileAsync(Manifest.FileId);
+            Report = await _reports.GetViewAsync(Manifest.FileId);
             if (Manifest.ParseStatus != HiwuParseStatus.ParseError
                 && HiwuManifestDocument.TryRead(Manifest.RawXml, out var document))
             {
@@ -107,6 +125,38 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
             }
 
             return Page();
+        }
+
+        public async Task<IActionResult> OnPostReviewSampleAsync(string? back)
+        {
+            var redirect = RedirectCahfs();
+            if (redirect != null)
+                return redirect;
+            if (!IsOperator())
+                return Forbid();
+
+            var file = await _readService.GetFileAsync(Id);
+            var sampleKey = SampleKey.Trim();
+            if (file == null
+                || !file.IsAmendment
+                || sampleKey.Length == 0
+                || sampleKey.Length > 100
+                || file.OriginalFile == null
+                || !HiwuManifestDocument.TryRead(file.RawXml, out var document)
+                || !HiwuManifestDocument.TryRead(file.OriginalFile.RawXml, out _)
+                || document.Samples.All(sample => !string.Equals(sample.SampleId, sampleKey, StringComparison.Ordinal)))
+            {
+                return RedirectToPage(new { integration = "EQUINE", id = Id, back });
+            }
+
+            var reviewedBy = User.Identity?.Name?.Trim() ?? "";
+            if (reviewedBy.Length == 0)
+                return Forbid();
+            if (reviewedBy.Length > 128)
+                reviewedBy = reviewedBy[..128];
+
+            await _readService.MarkSampleReviewedAsync(file.FileId, sampleKey, reviewedBy);
+            return RedirectToPage(new { integration = "EQUINE", id = Id, back });
         }
 
         public async Task<IActionResult> OnGetDownloadXmlAsync(Guid id)

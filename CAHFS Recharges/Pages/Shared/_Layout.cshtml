@@ -1,22 +1,25 @@
 @{
     var integration = ViewData["Integration"] as string;
-    var hasIntegration = !string.IsNullOrEmpty(integration);
+    var integrationAuthorized = ViewData["IntegrationAuthorized"] as bool? == true;
+    var hasIntegration = !string.IsNullOrEmpty(integration) && integrationAuthorized;
     var pageTitle = ViewData["Title"] as string ?? "CAEI";
-    
-    // Determine theme class based on integration
-    var themeClass = integration?.ToUpperInvariant() switch
-    {
-        "CAHFS" => "cahfs-theme gparc-theme",
-        "EQUINE" => "equine-theme gpare-theme",
-        _ => ""
-    };
+
+    // Theme (--theme-primary) only after workspace authorization succeeds
+    var themeClass = hasIntegration
+        ? integration?.ToUpperInvariant() switch
+        {
+            "CAHFS" => "cahfs-theme gparc-theme",
+            "EQUINE" => "equine-theme gpare-theme",
+            _ => ""
+        }
+        : "";
 }
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <base href="@(Context.Request.PathBase)/" />
+    <base href="@($"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.PathBase}/")" />
     <title>@pageTitle - CAHFS Integration Hub</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

@@ -31,6 +31,57 @@ namespace CAHFS_Recharges.Hiwu
                 .FirstOrDefaultAsync(f => f.FileId == fileId, cancellationToken);
         }
 
+        public async Task<IReadOnlyDictionary<string, HiwuSampleReview>> ListSampleReviewsAsync(
+            Guid fileId,
+            CancellationToken cancellationToken = default)
+        {
+            var rows = await _db.SampleReviews.AsNoTracking()
+                .Where(row => row.FileId == fileId)
+                .ToListAsync(cancellationToken);
+            return rows.ToDictionary(row => row.SampleKey, StringComparer.Ordinal);
+        }
+
+        public async Task<IReadOnlyDictionary<Guid, int>> CountSampleReviewsAsync(
+            IReadOnlyList<Guid> fileIds,
+            CancellationToken cancellationToken = default)
+        {
+            if (fileIds.Count == 0)
+                return new Dictionary<Guid, int>();
+
+            return await _db.SampleReviews.AsNoTracking()
+                .Where(row => fileIds.Contains(row.FileId))
+                .GroupBy(row => row.FileId)
+                .Select(group => new { group.Key, Count = group.Count() })
+                .ToDictionaryAsync(row => row.Key, row => row.Count, cancellationToken);
+        }
+
+        public async Task MarkSampleReviewedAsync(
+            Guid fileId,
+            string sampleKey,
+            string reviewedBy,
+            CancellationToken cancellationToken = default)
+        {
+            var existing = await _db.SampleReviews
+                .AnyAsync(row => row.FileId == fileId && row.SampleKey == sampleKey, cancellationToken);
+            if (existing)
+                return;
+
+            _db.SampleReviews.Add(new HiwuSampleReview
+            {
+                FileId = fileId,
+                SampleKey = sampleKey,
+                ReviewedBy = reviewedBy,
+                ReviewedUtc = DateTime.UtcNow
+            });
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+            }
+        }
+
         private IQueryable<HiwuImportFile> Filtered(DateTime? fromDate, DateTime? toDate, string? status)
         {
             var query = _db.ImportFiles.AsNoTracking();

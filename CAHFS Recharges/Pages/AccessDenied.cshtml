@@ -1,0 +1,39 @@
+@page
+@model CAHFS_Recharges.Pages.AccessDeniedModel
+@{
+    ViewData["Title"] = Model.Title;
+    ViewData["Integration"] = null;
+    ViewData["IntegrationAuthorized"] = false;
+}
+
+<div class="container py-5">
+    <h1 class="visually-hidden">@Model.Title</h1>
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-xl-6">
+            <div class="card border caei-card-lg">
+                <div class="card-header bg-white border-bottom caei-card-header-tight">
+                    <h2 class="h5 mb-0 caei-data-key">
+                        <span class="me-2" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="caei-inline-icon">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m0-8v2m0 10a9 9 0 110-18 9 9 0 010 18z"/>
+                            </svg>
+                        </span>
+                        @Model.Title
+                    </h2>
+                </div>
+                <div class="card-body text-center py-4 px-4">
+                    <p class="h5 text-gray-900 mb-2">@Model.Message</p>
+                    <p class="text-muted mb-4">@Model.Details</p>
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        <a asp-page="/Home" class="btn btn-primary">Go to Home</a>
+                        <a href="javascript:history.back()" class="btn btn-outline-secondary">Go Back</a>
+                    </div>
+                </div>
+                <div class="card-footer text-muted small">
+                    <span class="caei-data-key">Signed in as:</span>
+                    @(User.Identity?.Name ?? "Not authenticated")
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

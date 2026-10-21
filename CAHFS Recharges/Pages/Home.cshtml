@@ -1,7 +1,21 @@
 @page
 @model CAHFS_Recharges.Pages.HomeModel
+@inject ICaeiCapabilityService CapService
+@using CAHFS_Recharges.Models
 @{
     ViewData["Title"] = "Select Integration";
+    var username = User.Identity?.Name;
+    var canAe = CapService.IsInProductFamily(username, nameof(ProductFamily.AE));
+    var canLockbox = CapService.IsInProductFamily(username, nameof(ProductFamily.Lockbox));
+    var canHiwu = CapService.IsInProductFamily(username, nameof(ProductFamily.Hiwu));
+    var canCahfs = CapService.IsInLab(username, nameof(IntegrationType.CAHFS));
+    var canEquine = CapService.IsInLab(username, nameof(IntegrationType.EQUINE));
+    var showAeCahfs = CapService.CanOpenWorkspace(username, nameof(IntegrationType.CAHFS), nameof(ProductFamily.AE));
+    var showAeEquine = CapService.CanOpenWorkspace(username, nameof(IntegrationType.EQUINE), nameof(ProductFamily.AE));
+    var showLbCahfs = CapService.CanOpenWorkspace(username, nameof(IntegrationType.CAHFS), nameof(ProductFamily.Lockbox));
+    var showLbEquine = CapService.CanOpenWorkspace(username, nameof(IntegrationType.EQUINE), nameof(ProductFamily.Lockbox));
+    var showHiwu = CapService.CanOpenWorkspace(username, nameof(IntegrationType.EQUINE), nameof(ProductFamily.Hiwu));
+    var hasAnyWorkspace = showAeCahfs || showAeEquine || showLbCahfs || showLbEquine || showHiwu;
 }
 
 <div class="caei-home">
@@ -11,9 +25,29 @@
         <p class="text-muted mb-0">Select an integration to begin working</p>
     </div>
 
+@if (!hasAnyWorkspace)
+{
+    <div class="row justify-content-center py-4">
+        <div class="col-lg-7">
+            <partial name="_EmptyState" model='new CAHFS_Recharges.Models.CaeiEmptyState {
+                Title = "No workspaces assigned",
+                Message = "Your account is signed in, but no Aggie Enterprise, Lockbox, or HIWU workspace is mapped to your Kerberos ID. Contact your system administrator to request access.",
+                ActionHref = null,
+                ActionText = "",
+                UseFilterNav = false
+            }' />
+        </div>
+    </div>
+}
+else
+{
+    @if (canAe && (showAeCahfs || showAeEquine))
+    {
 <section class="caei-home-section" aria-labelledby="ae-workspaces">
     <h2 id="ae-workspaces" class="h5 caei-data-key caei-home-section-title">Aggie Enterprise Integration</h2>
     <div class="caei-home-grid">
+            @if (showAeCahfs)
+            {
             <article class="card caei-workspace-card h-100 cahfs-theme">
                 <div class="card-body d-flex flex-column">
                     <div class="d-flex align-items-start justify-content-between mb-3">
@@ -43,6 +77,9 @@
                     </form>
                 </div>
             </article>
+            }
+            @if (showAeEquine)
+            {
             <article class="card caei-workspace-card h-100 equine-theme">
                 <div class="card-body d-flex flex-column">
                     <div class="d-flex align-items-start justify-content-between mb-3">
@@ -70,12 +107,18 @@
                     </form>
                 </div>
             </article>
+            }
     </div>
 </section>
+    }
 
+    @if (canLockbox && (showLbCahfs || showLbEquine))
+    {
 <section class="caei-home-section" aria-labelledby="lockbox-workspaces">
     <h2 id="lockbox-workspaces" class="h5 caei-data-key caei-home-section-title">Bank of America Lockbox Integration</h2>
     <div class="caei-home-grid">
+            @if (showLbCahfs)
+            {
             <article class="card caei-workspace-card h-100 cahfs-theme">
                 <div class="card-body d-flex flex-column">
                     <div class="d-flex align-items-start justify-content-between mb-3">
@@ -104,6 +147,9 @@
                     </form>
                 </div>
             </article>
+            }
+            @if (showLbEquine)
+            {
             <article class="card caei-workspace-card h-100 equine-theme">
                 <div class="card-body d-flex flex-column">
                     <div class="d-flex align-items-start justify-content-between mb-3">
@@ -132,9 +178,13 @@
                     </form>
                 </div>
             </article>
+            }
     </div>
 </section>
+    }
 
+    @if (canHiwu && showHiwu)
+    {
 <section class="caei-home-section" aria-labelledby="hiwu-workspaces">
     <h2 id="hiwu-workspaces" class="h5 caei-data-key caei-home-section-title">HIWU Integration</h2>
     <div class="caei-home-grid">
@@ -168,6 +218,7 @@
             </article>
     </div>
 </section>
+    }
 
 <section class="caei-home-info" aria-labelledby="getting-started">
     <div class="caei-workspace-mark" aria-hidden="true">
@@ -179,10 +230,20 @@
         <h2 id="getting-started" class="h5 caei-data-key">Getting Started</h2>
         <p class="text-muted small">Select the lab and integration type for your work. Each workspace opens with tools specific to that system.</p>
         <ul class="small text-muted mb-0">
-            <li><span class="caei-data-key">Aggie Enterprise (CAHFS or EACL):</span> Review staged billing data, fix COA validation errors, send journals to Aggie Enterprise, and view submission history.</li>
-            <li><span class="caei-data-key">Bank of America Lockbox (CAHFS or EACL):</span> Review daily lockbox files, match checks to Great Plains invoices, post payments, and view payment history.</li>
-            <li><span class="caei-data-key">HIWU (EACL):</span> Review downloaded manifest files, create TraceFirst orders for received files that are not finished, and review TraceFirst attempts.</li>
+            @if (canAe)
+            {
+            <li><span class="caei-data-key">Aggie Enterprise@(canCahfs || canEquine ? ":" : "")</span> Review staged billing data, fix COA validation errors, send journals to Aggie Enterprise, and view submission history.</li>
+            }
+            @if (canLockbox)
+            {
+            <li><span class="caei-data-key">Bank of America Lockbox:</span> Review daily lockbox files, match checks to Great Plains invoices, post payments, and view payment history.</li>
+            }
+            @if (canHiwu)
+            {
+            <li><span class="caei-data-key">HIWU:</span> Review downloaded manifest files, create TraceFirst orders for received files that are not finished, and review TraceFirst attempts.</li>
+            }
         </ul>
     </div>
 </section>
+}
 </div>

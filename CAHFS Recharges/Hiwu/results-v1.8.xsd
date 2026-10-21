@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="overallResultTypes" final="restriction">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="NEGATIVE" />
+      <xs:enumeration value="NOT CONFIRMED" />
+      <xs:enumeration value="ADVERSE FINDING" />
+      <xs:enumeration value="ATYPICAL RESULT" />
+      <xs:enumeration value="NOT ANALYSED" />
+      <xs:enumeration value="PENDING" />
+      <xs:enumeration value="EXTENSION" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="resultsReport">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="resultsRef" type="xs:string" minOccurs="0" />
+        <xs:element name="sampleResults">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element maxOccurs="unbounded" name="sampleResult">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="sampleId" type="xs:string" />
+                    <xs:element name="receivedDate" type="xs:date" />
+                    <xs:element name="reportedDate" type="xs:date" />
+                    <xs:element name="overallResult" type="overallResultTypes" />
+                    <xs:element name="optionalComment" type="xs:string" minOccurs="0" />
+                    <xs:element name="tco2Value" type="xs:decimal" minOccurs="0" />
+                    <xs:element name="adverseFindings" minOccurs="0">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element maxOccurs="unbounded" name="adverseFinding">
+                            <xs:complexType>
+                              <xs:sequence>
+                                <xs:element name="substance" type="xs:string" />
+                                <xs:element name="concentrationLevel" type="xs:string" />
+                                <xs:element name="labComments" type="xs:string" minOccurs="0" />
+                                <xs:element name="specificGravity" type="xs:string" minOccurs="0" />
+                                <xs:element name="pH" type="xs:string" minOccurs="0" />
+                              </xs:sequence>
+                            </xs:complexType>
+                          </xs:element>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                    <xs:element name="adverseResultsComment" type="xs:string" minOccurs="0" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

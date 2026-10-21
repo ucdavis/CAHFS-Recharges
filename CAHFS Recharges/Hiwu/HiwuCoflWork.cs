@@ -84,18 +84,8 @@ namespace CAHFS_Recharges.Hiwu
             };
 
             var courier = Field(document.Mission, "courier");
-            var carrierId = catalog.MatchCarrier(courier);
-            accession.Add(Line(
-                "Courier",
-                "Carrier",
-                catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.CarriersList, out var carrierError)
-                    ? carrierError
-                    : string.IsNullOrWhiteSpace(courier)
-                        ? "Not sent. The file has no courier."
-                        : carrierId == null
-                            ? "Not sent. No single carrier match for " + courier + "."
-                            : courier + " (" + carrierId + ")"));
-            if (carrierError != null)
+            accession.Add(Line("Courier", "Carrier", catalog.DescribeCarrier(courier)));
+            if (catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.CarriersList, out var carrierError))
                 problems.Add(carrierError);
             accession.Add(Line("Tracking ref", "Carrier reference", Display(Field(document.Mission, "trackingRef"))));
             accession.Add(Line(
@@ -266,9 +256,11 @@ namespace CAHFS_Recharges.Hiwu
         private static string Field(Dictionary<string, string> fields, string name) =>
             fields.TryGetValue(name, out var value) ? value.Trim() : "";
 
-        private static bool Lasix(HiwuSampleDocument sample)
+        private static bool Lasix(HiwuSampleDocument sample) => Flag(sample, "lasix");
+
+        private static bool Flag(HiwuSampleDocument sample, string name)
         {
-            var value = Field(sample.Fields, "lasix");
+            var value = Field(sample.Fields, name);
             return value is "1" or "true";
         }
     }

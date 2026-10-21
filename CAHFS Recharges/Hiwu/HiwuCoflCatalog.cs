@@ -133,7 +133,53 @@ namespace CAHFS_Recharges.Hiwu
                 return null;
 
             var close = Carriers.Where(carrier => carrier.Names.Any(name => Distance(Letters(name), wanted) == 1)).ToList();
-            return close.Count == 1 ? close[0].Id : null;
+            if (close.Count == 1)
+                return close[0].Id;
+            if (close.Count > 1)
+                return null;
+
+            // FedEx Express → FedEx when that carrier is the only prefix match.
+            var prefix = Carriers.Where(carrier =>
+                carrier.Names.Any(name =>
+                {
+                    var letters = Letters(name);
+                    return letters.Length >= 4
+                        && (wanted.StartsWith(letters, StringComparison.Ordinal)
+                            || letters.StartsWith(wanted, StringComparison.Ordinal));
+                })).ToList();
+            return prefix.Count == 1 ? prefix[0].Id : null;
+        }
+
+        public string DescribeCarrier(string courier)
+        {
+            if (LookupErrors.TryGetValue(CarriersList, out var error))
+                return error;
+            if (string.IsNullOrWhiteSpace(courier))
+                return "Not sent. The HIWU file has no courier.";
+
+            var id = MatchCarrier(courier);
+            if (id != null)
+                return courier + " (" + id + ")";
+
+            var wanted = Letters(courier);
+            var exact = Carriers.Count(carrier => carrier.Names.Any(name => Letters(name) == wanted));
+            var close = Carriers.Count(carrier => carrier.Names.Any(name => Distance(Letters(name), wanted) == 1));
+            var prefix = Carriers.Count(carrier =>
+                carrier.Names.Any(name =>
+                {
+                    var letters = Letters(name);
+                    return letters.Length >= 4
+                        && (wanted.StartsWith(letters, StringComparison.Ordinal)
+                            || letters.StartsWith(wanted, StringComparison.Ordinal));
+                }));
+            if (exact > 1 || close > 1 || prefix > 1)
+            {
+                return "Not sent. Courier \"" + courier
+                    + "\" matches more than one TraceFirst carrier, so the carrier is left blank.";
+            }
+
+            return "Not sent. Courier \"" + courier
+                + "\" does not match a TraceFirst carrier, so the carrier is left blank.";
         }
 
         public static long? Match(IReadOnlyList<HiwuCoflNamedRecord> records, string expected)
@@ -450,9 +496,11 @@ namespace CAHFS_Recharges.Hiwu
             return [];
         }
 
-        private static bool Lasix(HiwuSampleDocument sample)
+        private static bool Lasix(HiwuSampleDocument sample) => Flag(sample, "lasix");
+
+        private static bool Flag(HiwuSampleDocument sample, string name)
         {
-            var value = Field(sample, "lasix");
+            var value = Field(sample, name);
             return value is "1" or "true";
         }
 

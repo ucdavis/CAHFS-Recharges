@@ -145,6 +145,11 @@ namespace CAHFS_Recharges.Services
             _logger.LogInformation("Hangfire: starting HIWU SFTP ingest.");
             await ingest.RunAsync();
             _logger.LogInformation("Hangfire: HIWU SFTP ingest finished.");
+
+            var reports = scope.ServiceProvider.GetRequiredService<HiwuResultsReportService>();
+            _logger.LogInformation("Hangfire: storing published HIWU results.");
+            await reports.StorePublishedAsync();
+            _logger.LogInformation("Hangfire: published HIWU results stored.");
         }
 
         [DisableConcurrentExecution(60 * 60)]

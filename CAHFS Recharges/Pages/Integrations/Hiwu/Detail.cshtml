@@ -110,6 +110,62 @@ else
         }
     </div>
 
+    <div class="card mb-3">
+        <div class="card-body">
+            <h2 class="h5 mb-2">Results report</h2>
+            @if (Model.Report == null)
+            {
+                <p class="mb-0">No published results have been stored for this file.</p>
+            }
+            else
+            {
+                <p class="mb-3">
+                    <span class="badge @HiwuReportStatus.BadgeClass(Model.Report.Status)">@Model.Report.Status</span>
+                </p>
+                @if (!string.IsNullOrWhiteSpace(Model.Report.ResultsRef))
+                {
+                    <p class="mb-3">Results ref <span class="caei-data-key">@Model.Report.ResultsRef</span></p>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.Report.ErrorMessage))
+                {
+                    <p class="mb-3" role="status">@Model.Report.ErrorMessage</p>
+                }
+                @if (Model.Report.Samples.Count > 0)
+                {
+                    <div class="table-responsive caei-scroll-y-400">
+                        <table class="table table-borderless caei-data-table mb-0">
+                            <thead class="sticky-top bg-white">
+                                <tr>
+                                    <th scope="col">Sample</th>
+                                    <th scope="col">Received</th>
+                                    <th scope="col">Reported</th>
+                                    <th scope="col">Overall result</th>
+                                    <th scope="col">Comment</th>
+                                    <th scope="col">TCO2</th>
+                                    <th scope="col">Adverse findings</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var sample in Model.Report.Samples)
+                                {
+                                    <tr>
+                                        <td><span class="caei-data-key">@sample.SampleId</span></td>
+                                        <td>@sample.ReceivedDate</td>
+                                        <td>@sample.ReportedDate</td>
+                                        <td>@sample.OverallResult</td>
+                                        <td>@(string.IsNullOrWhiteSpace(sample.Comment) ? "—" : sample.Comment)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(sample.Tco2Value) ? "—" : sample.Tco2Value)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(sample.AdverseFindings) ? "—" : sample.AdverseFindings)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
     @if (file.ParseStatus == HiwuParseStatus.ParseError)
     {
         <div class="alert alert-warning" role="alert">
@@ -170,7 +226,24 @@ else
         {
             <div class="card mb-3">
                 <div class="card-body">
-                    <h3 class="h6">Sample @sample.SampleId</h3>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <h3 class="h6 mb-0">Sample <span class="caei-data-key">@sample.SampleId</span></h3>
+                        @if (Model.SampleReviews.TryGetValue(sample.SampleId, out var review))
+                        {
+                            <p class="mb-0">
+                                <span class="badge badge-soft-success">Reviewed</span>
+                                @review.ReviewedBy
+                                @DetailModel.ToPacific(review.ReviewedUtc).ToString("yyyy-MM-dd HH:mm") Pacific
+                            </p>
+                        }
+                        else if (Model.CanReviewSamples && !string.IsNullOrEmpty(sample.SampleId))
+                        {
+                            <form method="post" asp-page-handler="ReviewSample" asp-route-id="@file.FileId" asp-route-integration="EQUINE" asp-route-back="@Request.Query["back"]" class="mb-0">
+                                <input type="hidden" name="SampleKey" value="@sample.SampleId" />
+                                <button type="submit" class="btn btn-primary">Mark reviewed</button>
+                            </form>
+                        }
+                    </div>
                     @if (sample.MissingOnOriginal)
                     {
                         <p>This sample is not on the original file.</p>

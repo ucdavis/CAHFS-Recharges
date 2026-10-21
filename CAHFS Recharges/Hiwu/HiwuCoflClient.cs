@@ -168,16 +168,12 @@ namespace CAHFS_Recharges.Hiwu
 
             try
             {
-                var shown = await GetWithFallbackAsync(
-                    "api/v2/accessions/" + accessionId,
-                    "api/v1/accessions/" + accessionId,
-                    cancellationToken);
-                var number = shown.Succeeded ? ReadAccessionNumber(shown.ResponseBody, accessionId) : null;
+                var number = await ReadShownAccessionNumberAsync(accessionId, cancellationToken);
                 if (string.IsNullOrWhiteSpace(number))
                 {
                     var listed = await GetWithFallbackAsync(
-                        "api/v2/accessions?per_page=5&accession_id_arr=" + accessionId,
-                        "api/v1/accessions?per_page=5&accession_id_arr=" + accessionId,
+                        "api/v2/accessions?per_page=5&detailed=true&accession_id_arr=" + accessionId,
+                        "api/v1/accessions?per_page=5&detailed=true&accession_id_arr=" + accessionId,
                         cancellationToken);
                     number = listed.Succeeded ? ReadAccessionNumber(listed.ResponseBody, accessionId) : null;
                 }
@@ -187,6 +183,10 @@ namespace CAHFS_Recharges.Hiwu
                     lock (_accessionNumberLock)
                         _accessionNumbers[accessionId] = number;
                 }
+                else
+                {
+                    _logger.LogWarning("HIWU COFL accession {AccessionId} did not include an accession number.", accessionId);
+                }
                 return number;
             }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
@@ -194,6 +194,64 @@ namespace CAHFS_Recharges.Hiwu
                 _logger.LogWarning(ex, "HIWU COFL accession number lookup failed for {AccessionId}.", accessionId);
                 return null;
             }
+        }
+
+        public async Task<(bool Ok, string Body, string? Error)> GetPublishedResultsAsync(
+            long accessionId,
+            CancellationToken cancellationToken = default)
+        {
+            var pages = new List<string>();
+            for (var page = 1; page <= 20; page++)
+            {
+                var path = "api/v2/accessions/" + accessionId + "/all_published_test_results?per_page=100&page=" + page;
+                var response = await GetBodyAsync(path, cancellationToken);
+                if (!response.Ok)
+                    return (false, "", "Published results were not returned for accession " + accessionId + ".");
+
+                var body = response.Body?.Trim() ?? "";
+                if (body.Length == 0 || body is "[]" or "{}")
+                    break;
+
+                pages.Add(body);
+                if (!HasFullPage(body))
+                    break;
+            }
+
+            if (pages.Count == 0)
+                return (true, "[]", null);
+            if (pages.Count == 1)
+                return (true, pages[0], null);
+            return (true, "[" + string.Join(",", pages) + "]", null);
+        }
+
+        private static bool HasFullPage(string body)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                return CountItems(document.RootElement) >= 100;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+        }
+
+        private static int CountItems(JsonElement element)
+        {
+            if (element.ValueKind == JsonValueKind.Array)
+                return element.GetArrayLength();
+            if (element.ValueKind != JsonValueKind.Object)
+                return 0;
+
+            var count = 0;
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.Value.ValueKind == JsonValueKind.Array)
+                    count = Math.Max(count, property.Value.GetArrayLength());
+            }
+
+            return count;
         }
 
         public Task<HiwuCoflCallResult> CreateAccessionAsync(
@@ -1013,6 +1071,21 @@ namespace CAHFS_Recharges.Hiwu
             }
         }
 
+        private async Task<string?> ReadShownAccessionNumberAsync(long accessionId, CancellationToken cancellationToken)
+        {
+            foreach (var path in new[] { "api/v2/accessions/" + accessionId, "api/v1/accessions/" + accessionId })
+            {
+                var shown = await GetBodyAsync(path, cancellationToken);
+                if (!shown.Ok)
+                    continue;
+                var number = ReadAccessionNumber(shown.Body, accessionId) ?? ReadLooseAccessionNumber(shown.Body);
+                if (!string.IsNullOrWhiteSpace(number))
+                    return number;
+            }
+
+            return null;
+        }
+
         private static string? ReadAccessionNumber(string? body, long accessionId)
         {
             if (string.IsNullOrWhiteSpace(body))
@@ -1029,18 +1102,52 @@ namespace CAHFS_Recharges.Hiwu
             }
         }
 
+        private static string? ReadLooseAccessionNumber(string? body)
+        {
+            if (string.IsNullOrWhiteSpace(body))
+                return null;
+
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                return LooseAccessionNumber(document.RootElement, 0);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        private static string? LooseAccessionNumber(JsonElement element, int depth)
+        {
+            if (element.ValueKind != JsonValueKind.Object || depth > 2)
+                return null;
+
+            var labeled = AccessionLabel(element, accessionId: 0);
+            if (labeled != null && IsTraceFirstAccessionNumber(labeled))
+                return labeled;
+
+            foreach (var name in new[] { "accession", "data", "attributes" })
+            {
+                if (!element.TryGetProperty(name, out var child))
+                    continue;
+                var nested = LooseAccessionNumber(child, depth + 1);
+                if (nested != null)
+                    return nested;
+            }
+
+            return null;
+        }
+
         private static string? FindAccessionNumber(JsonElement element, long accessionId)
         {
             if (element.ValueKind == JsonValueKind.Object)
             {
-                if (TryReadLong(element, "id", out var id)
-                    && id == accessionId
-                    && element.TryGetProperty("num", out var num)
-                    && num.ValueKind is JsonValueKind.String or JsonValueKind.Number)
+                if (TryReadLong(element, "id", out var id) && id == accessionId)
                 {
-                    var value = num.ValueKind == JsonValueKind.String ? num.GetString()?.Trim() : num.GetRawText();
-                    if (!string.IsNullOrEmpty(value) && value != accessionId.ToString())
-                        return value;
+                    var label = AccessionLabel(element, accessionId);
+                    if (label != null)
+                        return label;
                 }
 
                 foreach (var property in element.EnumerateObject())
@@ -1061,6 +1168,44 @@ namespace CAHFS_Recharges.Hiwu
             }
 
             return null;
+        }
+
+        private static string? AccessionLabel(JsonElement element, long accessionId)
+        {
+            var idText = accessionId > 0 ? accessionId.ToString() : null;
+            string? digits = null;
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.Value.ValueKind is not (JsonValueKind.String or JsonValueKind.Number))
+                    continue;
+
+                var value = property.Value.ValueKind == JsonValueKind.String
+                    ? property.Value.GetString()?.Trim()
+                    : property.Value.GetRawText();
+                if (string.IsNullOrEmpty(value) || value == idText)
+                    continue;
+
+                if (IsTraceFirstAccessionNumber(value))
+                    return value;
+
+                if (property.Name is "num" or "number" or "accession_num" or "accession_number")
+                    digits ??= value;
+            }
+
+            return digits;
+        }
+
+        private static bool IsTraceFirstAccessionNumber(string value)
+        {
+            if (value.Length < 6 || (value[0] != 'E' && value[0] != 'e'))
+                return false;
+            for (var i = 1; i < value.Length; i++)
+            {
+                if (!char.IsDigit(value[i]))
+                    return false;
+            }
+
+            return true;
         }
 
         private static long? FindId(JsonElement element)

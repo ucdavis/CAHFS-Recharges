@@ -47,6 +47,26 @@ namespace CAHFS_Recharges.Hiwu
                 entity.Property(e => e.ErrorMessage).HasMaxLength(500);
                 entity.Property(e => e.UpdatedUtc).HasColumnType("datetime2(3)");
             });
+
+            modelBuilder.Entity<HiwuSampleReview>(entity =>
+            {
+                entity.ToTable("C_HIWU_Sample_Review", "dbo");
+                entity.HasKey(e => new { e.FileId, e.SampleKey }).HasName("PK_C_HIWU_Sample_Review");
+                entity.Property(e => e.SampleKey).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.ReviewedBy).HasMaxLength(128).IsRequired();
+                entity.Property(e => e.ReviewedUtc).HasColumnType("datetime2(3)");
+            });
+
+            modelBuilder.Entity<HiwuReportFile>(entity =>
+            {
+                entity.ToTable("C_HIWU_Report", "dbo");
+                entity.HasKey(e => e.FileId).HasName("PK_C_HIWU_Report");
+                entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.RawJson).HasColumnType("nvarchar(max)").IsRequired();
+                entity.Property(e => e.ReportXml).HasColumnType("nvarchar(max)");
+                entity.Property(e => e.ErrorMessage).HasMaxLength(500);
+                entity.Property(e => e.UpdatedUtc).HasColumnType("datetime2(3)");
+            });
         }
     }
 }

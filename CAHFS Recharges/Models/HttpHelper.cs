@@ -84,6 +84,28 @@ namespace CAHFS_Recharges.Models
 
             return rootURL ?? string.Empty;
         }
+
+        /// Ensures a local app path includes PathBase (e.g. /Home → /caei-test/Home under IIS virtual dir).
+        public static string WithPathBase(HttpRequest request, string? localUrl)
+        {
+            var pathBase = request.PathBase.Value ?? string.Empty;
+            var url = string.IsNullOrWhiteSpace(localUrl) ? "/Home" : localUrl.Trim();
+            if (!url.StartsWith('/'))
+                url = "/" + url;
+
+            if (string.IsNullOrEmpty(pathBase)
+                || url.StartsWith(pathBase, StringComparison.OrdinalIgnoreCase))
+                return url;
+
+            return pathBase.TrimEnd('/') + url;
+        }
+
+        /// Cookie Path must match PathBase or deletes miss the auth cookie under a virtual directory.
+        public static string CookiePath(HttpRequest request)
+        {
+            var pathBase = request.PathBase.Value;
+            return string.IsNullOrEmpty(pathBase) ? "/" : pathBase;
+        }
     }
 }
 

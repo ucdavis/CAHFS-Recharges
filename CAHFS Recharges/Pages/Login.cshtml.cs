@@ -31,7 +31,9 @@ namespace CAHFS_Recharges.Pages
                 return LocalRedirect(GetSafeAppReturnUrl());
 
             if (string.IsNullOrEmpty(ReturnUrl))
-                ReturnUrl = "/Home";
+                ReturnUrl = HttpHelper.WithPathBase(Request, "/Home");
+            else if (Url.IsLocalUrl(ReturnUrl))
+                ReturnUrl = HttpHelper.WithPathBase(Request, ReturnUrl);
 
             return Page();
         }
@@ -55,6 +57,8 @@ namespace CAHFS_Recharges.Pages
                 returnURL = ReturnUrl;
             }
 
+            returnURL = HttpHelper.WithPathBase(Request, returnURL);
+
             var forceRenew = SignedOut
                 || Request.Cookies.ContainsKey(LogoutModel.RequireCasRenewCookieName);
 
@@ -62,7 +66,12 @@ namespace CAHFS_Recharges.Pages
             {
                 Response.Cookies.Delete(
                     LogoutModel.RequireCasRenewCookieName,
-                    new CookieOptions { Secure = true, SameSite = SameSiteMode.Strict, Path = "/" });
+                    new CookieOptions
+                    {
+                        Secure = Request.IsHttps,
+                        SameSite = SameSiteMode.Strict,
+                        Path = HttpHelper.CookiePath(Request)
+                    });
             }
 
             var redirectUrl = HttpHelper.GetRootURL() + new PathString("/CasLogin");
@@ -79,13 +88,12 @@ namespace CAHFS_Recharges.Pages
         private string GetSafeAppReturnUrl()
         {
             if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
-                return ReturnUrl;
+                return HttpHelper.WithPathBase(Request, ReturnUrl);
 
             if (!string.IsNullOrEmpty(Request.Query["ReturnUrl"]) && Url.IsLocalUrl(Request.Query["ReturnUrl"]))
-                return Request.Query["ReturnUrl"].ToString();
+                return HttpHelper.WithPathBase(Request, Request.Query["ReturnUrl"].ToString());
 
-            var pathBase = HttpContext.Request.PathBase.Value ?? string.Empty;
-            return string.IsNullOrEmpty(pathBase) ? "/Home" : pathBase + "/Home";
+            return HttpHelper.WithPathBase(Request, "/Home");
         }
     }
 }

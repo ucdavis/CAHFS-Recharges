@@ -60,51 +60,44 @@ namespace CAHFS_Recharges.Services
         /// <inheritdoc />
         public void SetIntegrationCookie(HttpContext httpContext, IntegrationType integration)
         {
-            var options = new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.Strict,
-                Expires = DateTimeOffset.UtcNow.Add(CookieExpiry),
-                IsEssential = true
-            };
-
-            httpContext.Response.Cookies.Append(CookieName, integration.ToString(), options);
+            httpContext.Response.Cookies.Append(CookieName, integration.ToString(), CookieWriteOptions(httpContext));
         }
 
         /// <inheritdoc />
         public void ClearIntegrationCookie(HttpContext httpContext)
         {
-            httpContext.Response.Cookies.Delete(CookieName, CookieClearOptions());
+            httpContext.Response.Cookies.Delete(CookieName, CookieClearOptions(httpContext));
         }
 
         /// <inheritdoc />
         public void SetProductFamilyCookie(HttpContext httpContext, ProductFamily productFamily)
         {
-            var options = new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.Strict,
-                Expires = DateTimeOffset.UtcNow.Add(CookieExpiry),
-                IsEssential = true
-            };
-
-            httpContext.Response.Cookies.Append(ProductFamilyCookieName, productFamily.ToString(), options);
+            httpContext.Response.Cookies.Append(ProductFamilyCookieName, productFamily.ToString(), CookieWriteOptions(httpContext));
         }
 
         /// <inheritdoc />
         public void ClearProductFamilyCookie(HttpContext httpContext)
         {
-            httpContext.Response.Cookies.Delete(ProductFamilyCookieName, CookieClearOptions());
+            httpContext.Response.Cookies.Delete(ProductFamilyCookieName, CookieClearOptions(httpContext));
         }
 
-        private static CookieOptions CookieClearOptions() => new()
+        private static CookieOptions CookieWriteOptions(HttpContext httpContext) => new()
         {
             HttpOnly = true,
-            Secure = true,
+            Secure = httpContext.Request.IsHttps,
             SameSite = SameSiteMode.Strict,
-            IsEssential = true
+            Expires = DateTimeOffset.UtcNow.Add(CookieExpiry),
+            IsEssential = true,
+            Path = HttpHelper.CookiePath(httpContext.Request)
+        };
+
+        private static CookieOptions CookieClearOptions(HttpContext httpContext) => new()
+        {
+            HttpOnly = true,
+            Secure = httpContext.Request.IsHttps,
+            SameSite = SameSiteMode.Strict,
+            IsEssential = true,
+            Path = HttpHelper.CookiePath(httpContext.Request)
         };
     }
 }

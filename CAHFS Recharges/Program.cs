@@ -17,6 +17,7 @@ using Joonasw.AspNetCore.SecurityHeaders;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using NLog;
@@ -29,6 +30,29 @@ using System.Security.Claims;
 using System.Xml.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// DoS / request-parsing hardening (defense-in-depth for form-body and oversized request abuse).
+// CVE-2026-70196 / CVE-2026-70188 also require ASP.NET Core runtime ≥ 9.0.21 (or matching patched band).
+const long MaxRequestBodyBytes = 10L * 1024 * 1024; // 10 MB
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = MaxRequestBodyBytes;
+    options.Limits.MaxRequestLineSize = 8 * 1024;
+    options.Limits.MaxRequestHeadersTotalSize = 32 * 1024;
+    options.Limits.MaxRequestHeaderCount = 100;
+});
+builder.Services.Configure<IISServerOptions>(options =>
+{
+    options.MaxRequestBodySize = MaxRequestBodyBytes;
+});
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = MaxRequestBodyBytes;
+    options.MemoryBufferThreshold = 64 * 1024;
+    options.ValueCountLimit = 2048;
+    options.KeyLengthLimit = 2048;
+    options.ValueLengthLimit = 1024 * 1024;
+});
 
 string awsCredentialsFilePath = Directory.GetCurrentDirectory() + "\\awscredentials.xml";
 
@@ -340,7 +364,7 @@ try
     // Set "CAEI:UseRouteBased" in appsettings.json to false to use legacy pages
     IntegrationLinkHelper.Configure(builder.Configuration);
 
-    // CSP
+    // CSP (script isolation via self + nonces; frames denied)
     app.UseCsp(csp =>
     {
         csp.AllowScripts
@@ -369,6 +393,17 @@ try
             .AllowUnsafeInline();
     });
 
+    // Complementary browser hardening (CSP already sets frame-ancestors)
+    app.Use(async (context, next) =>
+    {
+        var headers = context.Response.Headers;
+        headers.TryAdd("X-Content-Type-Options", "nosniff");
+        headers.TryAdd("X-Frame-Options", "DENY");
+        headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
+        headers.TryAdd("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+        await next();
+    });
+
     // PathBase: when hosted under a virtual directory (e.g. IIS /caei-test), set in appsettings.{Environment}.json
     var pathBase = builder.Configuration.GetValue<string>("PathBase");
     if (!string.IsNullOrWhiteSpace(pathBase))
@@ -378,7 +413,7 @@ try
             app.UsePathBase(pathBase);
     }
 
-    // Pipeline
+    // Pipeline — never leak exception details outside Development
     if (!app.Environment.IsDevelopment())
     {
         app.UseExceptionHandler("/Error");

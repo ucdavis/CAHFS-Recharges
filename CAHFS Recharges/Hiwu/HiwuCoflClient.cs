@@ -71,6 +71,10 @@ namespace CAHFS_Recharges.Hiwu
             }
         }
 
+        /// Drops the cached TraceFirst token so the next call logs in again.
+        /// Needed when another process (e.g. local debug) logs in with the same user and invalidates this token.
+        public void InvalidateSession() => _session = null;
+
         public async Task<HttpRequestMessage> CreateRequestAsync(
             HttpMethod method,
             string relativePath,
@@ -556,11 +560,14 @@ namespace CAHFS_Recharges.Hiwu
 
         private async Task<(bool Ok, string Body)> GetBodyAsync(string relativePath, CancellationToken cancellationToken)
         {
-            using var request = await CreateRequestAsync(HttpMethod.Get, relativePath, cancellationToken);
-            var client = _httpClientFactory.CreateClient(HttpClientName);
-            using var response = await client.SendAsync(request, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            return (response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created, body);
+            var result = await GetOnceAsync(relativePath, cancellationToken);
+            if (IsAccessDenied(result.Status))
+            {
+                InvalidateSession();
+                result = await GetOnceAsync(relativePath, cancellationToken);
+            }
+
+            return (result.Status is HttpStatusCode.OK or HttpStatusCode.Created, result.Body);
         }
 
         private static HiwuCoflCallResult ExistingAnimal(long id) =>
@@ -766,25 +773,49 @@ namespace CAHFS_Recharges.Hiwu
             string v1Path,
             CancellationToken cancellationToken)
         {
-            using var v2Request = await CreateRequestAsync(HttpMethod.Get, v2Path, cancellationToken);
-            var client = _httpClientFactory.CreateClient(HttpClientName);
-            using var v2Response = await client.SendAsync(v2Request, cancellationToken);
-            var v2Body = await v2Response.Content.ReadAsStringAsync(cancellationToken);
-            if (v2Response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created)
-                return ToResult((v2Response.StatusCode, v2Body), "v2");
+            var v2 = await GetOnceAsync(v2Path, cancellationToken);
+            if (v2.Status is HttpStatusCode.OK or HttpStatusCode.Created)
+                return ToResult(v2, "v2");
+
+            if (IsAccessDenied(v2.Status))
+            {
+                _logger.LogWarning(
+                    "HIWU COFL get {Path} unauthorized. Refreshing TraceFirst token and retrying once.",
+                    v2Path.Split('?')[0]);
+                InvalidateSession();
+                v2 = await GetOnceAsync(v2Path, cancellationToken);
+                if (v2.Status is HttpStatusCode.OK or HttpStatusCode.Created)
+                    return ToResult(v2, "v2");
+            }
 
             var v2Route = v2Path.Split('?')[0];
-            if (IsMissingRoute(v2Response.StatusCode, v2Body))
+            if (IsMissingRoute(v2.Status, v2.Body))
                 _logger.LogInformation("HIWU COFL v2 route {Path} is not available. Trying v1.", v2Route);
             else
                 _logger.LogInformation(
                     "HIWU COFL v2 call {Path} failed with status {StatusCode}. Trying v1.",
                     v2Route,
-                    (int)v2Response.StatusCode);
-            using var v1Request = await CreateRequestAsync(HttpMethod.Get, v1Path, cancellationToken);
-            using var v1Response = await client.SendAsync(v1Request, cancellationToken);
-            var v1Body = await v1Response.Content.ReadAsStringAsync(cancellationToken);
-            return ToResult((v1Response.StatusCode, v1Body), "v1");
+                    (int)v2.Status);
+
+            var v1 = await GetOnceAsync(v1Path, cancellationToken);
+            if (IsAccessDenied(v1.Status))
+            {
+                InvalidateSession();
+                v1 = await GetOnceAsync(v1Path, cancellationToken);
+            }
+
+            return ToResult(v1, "v1");
+        }
+
+        private async Task<(HttpStatusCode Status, string Body)> GetOnceAsync(
+            string relativePath,
+            CancellationToken cancellationToken)
+        {
+            using var request = await CreateRequestAsync(HttpMethod.Get, relativePath, cancellationToken);
+            var client = _httpClientFactory.CreateClient(HttpClientName);
+            using var response = await client.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            return (response.StatusCode, body);
         }
 
         private async Task<(HttpStatusCode Status, string Body)> PostAsync(
@@ -795,22 +826,38 @@ namespace CAHFS_Recharges.Hiwu
             await _postLock.WaitAsync(cancellationToken);
             try
             {
-                var wait = _nextPostUtc - DateTime.UtcNow;
-                if (wait > TimeSpan.Zero)
-                    await Task.Delay(wait, cancellationToken);
+                var result = await PostOnceAsync(relativePath, payload, cancellationToken);
+                if (!IsAccessDenied(result.Status))
+                    return result;
 
-                using var request = await CreateRequestAsync(HttpMethod.Post, relativePath, cancellationToken);
-                request.Content = JsonContent.Create(payload, options: JsonOptions);
-                var client = _httpClientFactory.CreateClient(HttpClientName);
-                using var response = await client.SendAsync(request, cancellationToken);
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                _nextPostUtc = DateTime.UtcNow.AddMilliseconds(IsRateLimited(response.StatusCode, body) ? 5000 : 400);
-                return (response.StatusCode, body);
+                _logger.LogWarning(
+                    "HIWU COFL post {Path} unauthorized. Refreshing TraceFirst token and retrying once.",
+                    relativePath.Split('?')[0]);
+                InvalidateSession();
+                return await PostOnceAsync(relativePath, payload, cancellationToken);
             }
             finally
             {
                 _postLock.Release();
             }
+        }
+
+        private async Task<(HttpStatusCode Status, string Body)> PostOnceAsync(
+            string relativePath,
+            object payload,
+            CancellationToken cancellationToken)
+        {
+            var wait = _nextPostUtc - DateTime.UtcNow;
+            if (wait > TimeSpan.Zero)
+                await Task.Delay(wait, cancellationToken);
+
+            using var request = await CreateRequestAsync(HttpMethod.Post, relativePath, cancellationToken);
+            request.Content = JsonContent.Create(payload, options: JsonOptions);
+            var client = _httpClientFactory.CreateClient(HttpClientName);
+            using var response = await client.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            _nextPostUtc = DateTime.UtcNow.AddMilliseconds(IsRateLimited(response.StatusCode, body) ? 5000 : 400);
+            return (response.StatusCode, body);
         }
 
         private HiwuCoflCallResult ToResult((HttpStatusCode Status, string Body) response, string apiVersion)

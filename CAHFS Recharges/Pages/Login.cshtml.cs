@@ -1,4 +1,6 @@
 using CAHFS_Recharges.Models;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
@@ -25,10 +27,18 @@ namespace CAHFS_Recharges.Pages
         [BindProperty(SupportsGet = true)]
         public bool SignedOut { get; set; }
 
-        public IActionResult OnGet()
+        public async Task<IActionResult> OnGetAsync()
         {
-            if (User.Identity?.IsAuthenticated == true)
+            // After Logout, never bounce back to Home if the auth cookie failed to clear (common on IIS PathBase/HTTP).
+            if (SignedOut)
+            {
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                HttpHelper.ExpireAuthCookie(Response, Request);
+            }
+            else if (User.Identity?.IsAuthenticated == true)
+            {
                 return LocalRedirect(GetSafeAppReturnUrl());
+            }
 
             if (string.IsNullOrEmpty(ReturnUrl))
                 ReturnUrl = HttpHelper.WithPathBase(Request, "/Home");
@@ -41,7 +51,7 @@ namespace CAHFS_Recharges.Pages
         /// Starts the UC Davis CAS login redirect (same service URL construction as before).
         public IActionResult OnGetCas()
         {
-            if (User.Identity?.IsAuthenticated == true)
+            if (User.Identity?.IsAuthenticated == true && !SignedOut)
                 return LocalRedirect(GetSafeAppReturnUrl());
 
             Uri url = new(Request.GetDisplayUrl());
@@ -66,12 +76,7 @@ namespace CAHFS_Recharges.Pages
             {
                 Response.Cookies.Delete(
                     LogoutModel.RequireCasRenewCookieName,
-                    new CookieOptions
-                    {
-                        Secure = Request.IsHttps,
-                        SameSite = SameSiteMode.Strict,
-                        Path = HttpHelper.CookiePath(Request)
-                    });
+                    new CookieOptions { Secure = true, SameSite = SameSiteMode.Strict, Path = "/" });
             }
 
             var redirectUrl = HttpHelper.GetRootURL() + new PathString("/CasLogin");

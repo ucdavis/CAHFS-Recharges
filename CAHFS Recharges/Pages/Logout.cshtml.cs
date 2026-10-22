@@ -29,33 +29,20 @@ namespace CAHFS_Recharges.Pages
         public async Task<IActionResult> OnGetAsync()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
-            var cookiePath = HttpHelper.CookiePath(Request);
-            var secure = Request.IsHttps;
-
-            // Belt-and-suspenders: expire the named auth cookie even if SignOut missed a path match.
-            // Under PathBase the auth cookie is scoped to /caei-test; also clear Path="/" for older cookies.
-            Response.Cookies.Delete(
-                "CAHFSRecharge.Authentication.UCD",
-                new CookieOptions { Secure = secure, SameSite = SameSiteMode.Lax, Path = cookiePath });
-            if (cookiePath != "/")
-            {
-                Response.Cookies.Delete(
-                    "CAHFSRecharge.Authentication.UCD",
-                    new CookieOptions { Secure = secure, SameSite = SameSiteMode.Lax, Path = "/" });
-            }
+            HttpHelper.ExpireAuthCookie(Response, Request);
 
             _integrationContext.ClearIntegrationCookie(HttpContext);
             _integrationContext.ClearProductFamilyCookie(HttpContext);
 
+            var cookiePath = HttpHelper.CookiePath(Request);
             Response.Cookies.Append(
                 RequireCasRenewCookieName,
                 "1",
                 new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = secure,
-                    SameSite = SameSiteMode.Strict,
+                    Secure = Request.IsHttps,
+                    SameSite = SameSiteMode.Lax,
                     MaxAge = TimeSpan.FromMinutes(15),
                     IsEssential = true,
                     Path = cookiePath

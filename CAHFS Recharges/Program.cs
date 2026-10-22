@@ -95,8 +95,9 @@ try
     {
         options.IdleTimeout = TimeSpan.FromMinutes(60);
         options.Cookie.Name = ".CAHFSRecharge.Session";
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.Cookie.SameSite = SameSiteMode.Strict;
+        // SameAsRequest: test is often HTTP (cahfs-caei); Always blocks session cookies there.
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.IsEssential = true;
     });
 
@@ -112,7 +113,11 @@ try
     builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
         .AddCookie(options =>
         {
-            options.Cookie.Name = "CAHFSRecharge.Authentication.UCD";
+            options.Cookie.Name = HttpHelper.AuthCookieName;
+            options.Cookie.HttpOnly = true;
+            options.Cookie.IsEssential = true;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
             options.LoginPath = new PathString("/Login");
             options.AccessDeniedPath = new PathString("/AccessDenied");
             options.ExpireTimeSpan = TimeSpan.FromHours(12);
@@ -388,10 +393,9 @@ try
     app.UseStaticFiles();
     app.UseRouting();
 
+    app.UseCookiePolicy();
     app.UseAuthentication();
     app.UseAuthorization();
-
-    app.UseCookiePolicy();
     app.UseSession();
 
     // Redirect legacy URLs to route-based so old bookmarks do not 404 (Phase 2)

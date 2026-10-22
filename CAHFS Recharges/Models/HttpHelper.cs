@@ -106,6 +106,38 @@ namespace CAHFS_Recharges.Models
             var pathBase = request.PathBase.Value;
             return string.IsNullOrEmpty(pathBase) ? "/" : pathBase;
         }
+
+        public const string AuthCookieName = "CAHFSRecharge.Authentication.UCD";
+
+        /// Expires a cookie under PathBase and "/" with Secure/SameSite variants.
+        /// IIS virtual dirs + HTTP vs HTTPS often leave the auth cookie if Path/Secure do not match exactly.
+        public static void ExpireCookie(HttpResponse response, HttpRequest request, string name)
+        {
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/", CookiePath(request) };
+            if (request.PathBase.HasValue)
+                paths.Add(request.PathBase.Value!);
+
+            foreach (var path in paths)
+            {
+                foreach (var secure in new[] { false, true })
+                {
+                    foreach (var sameSite in new[] { SameSiteMode.Lax, SameSiteMode.Strict, SameSiteMode.Unspecified })
+                    {
+                        response.Cookies.Delete(name, new CookieOptions
+                        {
+                            Path = path,
+                            Secure = secure,
+                            SameSite = sameSite,
+                            HttpOnly = true,
+                            IsEssential = true
+                        });
+                    }
+                }
+            }
+        }
+
+        public static void ExpireAuthCookie(HttpResponse response, HttpRequest request) =>
+            ExpireCookie(response, request, AuthCookieName);
     }
 }
 

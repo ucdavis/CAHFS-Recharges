@@ -66,7 +66,7 @@ namespace CAHFS_Recharges.Services
         /// <inheritdoc />
         public void ClearIntegrationCookie(HttpContext httpContext)
         {
-            httpContext.Response.Cookies.Delete(CookieName, CookieClearOptions(httpContext));
+            HttpHelper.ExpireCookie(httpContext.Response, httpContext.Request, CookieName);
         }
 
         /// <inheritdoc />
@@ -78,24 +78,15 @@ namespace CAHFS_Recharges.Services
         /// <inheritdoc />
         public void ClearProductFamilyCookie(HttpContext httpContext)
         {
-            httpContext.Response.Cookies.Delete(ProductFamilyCookieName, CookieClearOptions(httpContext));
+            HttpHelper.ExpireCookie(httpContext.Response, httpContext.Request, ProductFamilyCookieName);
         }
 
         private static CookieOptions CookieWriteOptions(HttpContext httpContext) => new()
         {
             HttpOnly = true,
             Secure = httpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Strict,
+            SameSite = SameSiteMode.Lax,
             Expires = DateTimeOffset.UtcNow.Add(CookieExpiry),
-            IsEssential = true,
-            Path = HttpHelper.CookiePath(httpContext.Request)
-        };
-
-        private static CookieOptions CookieClearOptions(HttpContext httpContext) => new()
-        {
-            HttpOnly = true,
-            Secure = httpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Strict,
             IsEssential = true,
             Path = HttpHelper.CookiePath(httpContext.Request)
         };

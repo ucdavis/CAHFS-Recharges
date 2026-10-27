@@ -5,18 +5,27 @@
 @{
     ViewData["Title"] = "HIWU manifest files";
     var pathBase = HttpContext.Request.PathBase;
-    var exportUrl = $"{pathBase}/Integrations/EQUINE/Hiwu/Files?handler=Export&fromDate={Model.FromDate:yyyy-MM-dd}&toDate={Model.ToDate:yyyy-MM-dd}&status={Uri.EscapeDataString(Model.Status ?? "")}";
+    var qEncoded = Uri.EscapeDataString(Model.Q ?? "");
+    var exportUrl = $"{pathBase}/Integrations/EQUINE/Hiwu/Files?handler=Export&fromDate={Model.FromDate:yyyy-MM-dd}&toDate={Model.ToDate:yyyy-MM-dd}&status={Uri.EscapeDataString(Model.Status ?? "")}&q={qEncoded}";
     var listReturn = "/Integrations/EQUINE/Hiwu/Files" + Request.QueryString.Value;
     var selectedStatus = Model.Status ?? "";
     var showReviewed = string.Equals(selectedStatus, HiwuParseStatus.Amended, StringComparison.OrdinalIgnoreCase);
+    var colCount = showReviewed ? 6 : 5;
 
     string CardUrl(string? status)
     {
         var parts = new List<string>();
-        if (Model.FromDate.HasValue)
-            parts.Add($"FromDate={Model.FromDate:yyyy-MM-dd}");
-        if (Model.ToDate.HasValue)
-            parts.Add($"ToDate={Model.ToDate:yyyy-MM-dd}");
+        if (!Model.HasSearch)
+        {
+            if (Model.FromDate.HasValue)
+                parts.Add($"FromDate={Model.FromDate:yyyy-MM-dd}");
+            if (Model.ToDate.HasValue)
+                parts.Add($"ToDate={Model.ToDate:yyyy-MM-dd}");
+        }
+        else if (!string.IsNullOrWhiteSpace(Model.Q))
+        {
+            parts.Add($"q={Uri.EscapeDataString(Model.Q)}");
+        }
         if (!string.IsNullOrWhiteSpace(status))
             parts.Add($"Status={Uri.EscapeDataString(status)}");
         var query = parts.Count == 0 ? "" : "?" + string.Join("&", parts);
@@ -24,10 +33,43 @@
     }
 }
 
-<div class="d-flex justify-content-between align-items-start mb-4">
+@* Title + Search (top row). GET search uses site.js: .is-loading, #global-progress-bar, .caei-skeleton-row *@
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
     <div>
         <h1 class="h3 mb-1">HIWU manifest files</h1>
         <p class="text-muted mb-0">EQUINE files downloaded from HIWU. Dates are Pacific time.</p>
+    </div>
+    <div class="caei-global-search" style="min-width: min(100%, 22rem);">
+        <form method="get"
+              class="d-flex flex-wrap align-items-end gap-2"
+              aria-label="Find sample or accession"
+              data-caei-live="search">
+            <div class="flex-grow-1 caei-field">
+                <label asp-for="Q" class="form-label mb-1">Global Search</label>
+                <input asp-for="Q"
+                       name="q"
+                       class="form-control"
+                       type="search"
+                       placeholder="Sample ID or Accession"
+                       autocomplete="off"
+                       aria-describedby="@(Model.HasSearch ? "caei-search-status" : null)" />
+            </div>
+            <button type="submit" class="btn btn-primary">Find</button>
+        </form>
+        @if (Model.HasSearch)
+        {
+            <div id="caei-search-status" class="mt-2 d-flex flex-wrap align-items-center gap-2" role="status">
+                <span class="small text-muted">
+                    <span class="caei-data-key">@Model.Files.Count</span> file(s) match
+                    <span class="caei-data-key">@Model.Q</span>
+                </span>
+                @* Full navigation (no data-caei-filter-nav): AJAX only swaps data-caei-region and would leave this status text stale. *@
+                <a href="@(pathBase)/Integrations/EQUINE/Hiwu/Files"
+                   class="btn btn-sm caei-btn-outline caei-btn-theme">
+                    Clear
+                </a>
+            </div>
+        }
     </div>
 </div>
 
@@ -74,25 +116,34 @@
     </a>
 </div>
 
-<form method="get" class="caei-control-panel mb-4" aria-label="Manifest filters" data-caei-filter>
-    <h2 class="h6 mb-3">Filters</h2>
-            <div class="row g-3 align-items-end">
-                <div class="col-md-3 col-sm-6">
-                    <label asp-for="FromDate" class="form-label">From date <span class="text-muted fw-normal">(optional)</span></label>
-                    <input asp-for="FromDate" class="form-control" type="date" />
-                </div>
-                <div class="col-md-3 col-sm-6">
-                    <label asp-for="ToDate" class="form-label">To date <span class="text-muted fw-normal">(optional)</span></label>
-                    <input asp-for="ToDate" class="form-control" type="date" />
-                </div>
-                <input asp-for="Status" type="hidden" />
-                <div class="col-md-6 d-flex align-items-end gap-2 flex-wrap">
+@if (!Model.HasSearch)
+{
+    <form method="get" class="caei-control-panel mb-4" aria-label="Manifest filters" data-caei-filter>
+        <h2 class="h6 mb-3">Filters</h2>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3 col-sm-6">
+                <label asp-for="FromDate" class="form-label">From date <span class="text-muted fw-normal">(optional)</span></label>
+                <input asp-for="FromDate" class="form-control" type="date" />
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <label asp-for="ToDate" class="form-label">To date <span class="text-muted fw-normal">(optional)</span></label>
+                <input asp-for="ToDate" class="form-control" type="date" />
+            </div>
+            <input asp-for="Status" type="hidden" />
+            <div class="col-md-6 d-flex align-items-end gap-2 flex-wrap">
                 <button type="submit" class="btn btn-primary">Apply filters</button>
                 <a href="@(pathBase)/Integrations/EQUINE/Hiwu/Files" class="btn btn-outline-secondary" data-caei-filter-nav>Reset</a>
                 <a href="@exportUrl" class="btn btn-outline-secondary" data-caei-live="export">Download Excel</a>
-                </div>
             </div>
-        </form>
+        </div>
+    </form>
+}
+else
+{
+    <div class="mb-4 d-flex flex-wrap gap-2">
+        <a href="@exportUrl" class="btn btn-outline-secondary" data-caei-live="export">Download Excel</a>
+    </div>
+}
 
 <div class="card mb-3" data-caei-region="results">
     <div class="card-body border-bottom py-3 d-flex flex-wrap align-items-start justify-content-between gap-2">
@@ -102,32 +153,41 @@
         </div>
         <partial name="_TableDensityToggle" />
     </div>
-    @if (Model.Files.Count == 0)
-    {
-        <partial name="_EmptyState" model='new CAHFS_Recharges.Models.CaeiEmptyState {
-            Title = "No manifest files",
-            Message = "No manifest files found for the selected filters.",
-            ActionHref = $"{pathBase}/Integrations/EQUINE/Hiwu/Files",
-            ActionText = "Clear filters"
-        }' />
-    }
-    else
-    {
-        <div class="table-responsive caei-scroll-y-400">
-            <table class="table table-borderless caei-data-table mb-0">
-                <thead class="sticky-top bg-white">
+    @* Always render tbody so GET search can swap in .caei-skeleton-row via site.js *@
+    <div class="table-responsive caei-scroll-y-400" style="min-width: 0; max-width: 100%;">
+        <table class="table table-borderless caei-data-table mb-0">
+            <thead class="sticky-top bg-white">
+                <tr>
+                    <th scope="col">File name</th>
+                    <th scope="col">Samples</th>
+                    <th scope="col">Date downloaded</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">TraceFirst</th>
+                    @if (showReviewed)
+                    {
+                        <th scope="col">Reviewed</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Files.Count == 0)
+                {
                     <tr>
-                        <th scope="col">File name</th>
-                        <th scope="col">Date downloaded</th>
-                        <th scope="col">Status</th>
-                        <th scope="col">TraceFirst</th>
-                        @if (showReviewed)
-                        {
-                            <th scope="col">Reviewed</th>
-                        }
+                        <td colspan="@colCount" class="p-0 border-0">
+                            <partial name="_EmptyState" model='new CAHFS_Recharges.Models.CaeiEmptyState {
+                                Title = Model.HasSearch ? "No matching files" : "No manifest files",
+                                Message = Model.HasSearch
+                                    ? "No manifest files match that sample ID or accession."
+                                    : "No manifest files found for the selected filters.",
+                                ActionHref = $"{pathBase}/Integrations/EQUINE/Hiwu/Files",
+                                ActionText = Model.HasSearch ? "Clear search" : "Clear filters",
+                                UseFilterNav = !Model.HasSearch
+                            }' />
+                        </td>
                     </tr>
-                </thead>
-                <tbody>
+                }
+                else
+                {
                     @foreach (var file in Model.Files)
                     {
                         var hiwuStatusClass = file.ParseStatus switch
@@ -138,9 +198,10 @@
                         };
                         var traceFirstStatus = Model.TraceFirstStatus.TryGetValue(file.FileId, out var traceFirst) ? traceFirst : "Not started";
                         <tr>
-                            <td class="caei-data-key">
-                                <a href="@(pathBase)@IntegrationLinkHelper.AppendHiwuReturn(IntegrationLinkHelper.GetHiwuFileDetailPage(file.FileId), listReturn)">@file.RemoteFileName</a>
+                            <td>
+                                <a class="caei-data-key" href="@(pathBase)@IntegrationLinkHelper.AppendHiwuReturn(IntegrationLinkHelper.GetHiwuFileDetailPage(file.FileId), listReturn)">@file.RemoteFileName</a>
                             </td>
+                            <td>@file.SampleCount</td>
                             <td>@FilesModel.ToPacific(file.ReceivedUtc).ToString("yyyy-MM-dd HH:mm")</td>
                             <td>
                                 <span class="badge @hiwuStatusClass d-inline-flex align-items-center gap-1">
@@ -176,8 +237,8 @@
                             }
                         </tr>
                     }
-                </tbody>
-            </table>
-        </div>
-    }
+                }
+            </tbody>
+        </table>
+    </div>
 </div>

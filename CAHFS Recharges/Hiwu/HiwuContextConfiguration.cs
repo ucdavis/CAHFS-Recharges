@@ -23,6 +23,7 @@ namespace CAHFS_Recharges.Hiwu
                 entity.Property(e => e.RemoteFileName).HasMaxLength(500).IsRequired();
                 entity.Property(e => e.ReceivedUtc).HasColumnType("datetime2(3)");
                 entity.Property(e => e.RawXml).HasColumnType("nvarchar(max)").IsRequired();
+                entity.Property(e => e.SampleCount).IsRequired();
                 entity.Property(e => e.ContentHash).HasMaxLength(64).IsFixedLength().IsRequired();
                 entity.Property(e => e.ParseStatus).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.ParseError).HasMaxLength(500);
@@ -38,11 +39,25 @@ namespace CAHFS_Recharges.Hiwu
                     .HasConstraintName("FK_C_HIWU_Import_File_Original");
             });
 
+            modelBuilder.Entity<HiwuImportSample>(entity =>
+            {
+                entity.ToTable("C_HIWU_Import_Sample", "dbo");
+                entity.HasKey(e => new { e.FileId, e.SampleId }).HasName("PK_C_HIWU_Import_Sample");
+                entity.Property(e => e.SampleId).HasMaxLength(100).IsRequired();
+                entity.HasIndex(e => e.SampleId).HasDatabaseName("IX_C_HIWU_Import_Sample_SampleId");
+                entity.HasOne<HiwuImportFile>()
+                    .WithMany()
+                    .HasForeignKey(e => e.FileId)
+                    .OnDelete(DeleteBehavior.NoAction)
+                    .HasConstraintName("FK_C_HIWU_Import_Sample_File");
+            });
+
             modelBuilder.Entity<HiwuCoflSampleRow>(entity =>
             {
                 entity.ToTable("C_HIWU_Cofl_Sample", "dbo");
                 entity.HasKey(e => new { e.FileId, e.SampleKey }).HasName("PK_C_HIWU_Cofl_Sample");
                 entity.Property(e => e.SampleKey).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.AccessionNumber).HasMaxLength(100);
                 entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.ErrorMessage).HasMaxLength(500);
                 entity.Property(e => e.UpdatedUtc).HasColumnType("datetime2(3)");

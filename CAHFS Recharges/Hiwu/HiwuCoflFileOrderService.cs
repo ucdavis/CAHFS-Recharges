@@ -386,6 +386,13 @@ namespace CAHFS_Recharges.Hiwu
 
         private async Task FillAccessionNumbersAsync(IReadOnlyList<HiwuCoflSampleRow> rows, CancellationToken cancellationToken)
         {
+            foreach (var row in rows)
+            {
+                if (row.AccessionId == null || string.IsNullOrWhiteSpace(row.AccessionNumber))
+                    continue;
+                _accessionNumbers[row.AccessionId.Value] = row.AccessionNumber;
+            }
+
             foreach (var id in rows.Select(row => row.AccessionId).Where(id => id != null).Select(id => id!.Value).Distinct())
             {
                 if (_accessionNumbers.ContainsKey(id))
@@ -398,6 +405,40 @@ namespace CAHFS_Recharges.Hiwu
                 if (row.AccessionId != null && _accessionNumbers.TryGetValue(row.AccessionId.Value, out var number))
                     row.AccessionNumber = number;
             }
+
+            await PersistAccessionNumbersAsync(rows, cancellationToken);
+        }
+
+        private async Task PersistAccessionNumbersAsync(
+            IReadOnlyList<HiwuCoflSampleRow> rows,
+            CancellationToken cancellationToken)
+        {
+            var withNumbers = rows
+                .Where(row => row.AccessionId != null && !string.IsNullOrWhiteSpace(row.AccessionNumber))
+                .ToList();
+            if (withNumbers.Count == 0)
+                return;
+
+            var fileIds = withNumbers.Select(row => row.FileId).Distinct().ToList();
+            var tracked = await _db.CoflSamples
+                .Where(row => fileIds.Contains(row.FileId))
+                .ToListAsync(cancellationToken);
+
+            var changed = false;
+            foreach (var row in tracked)
+            {
+                if (row.AccessionId == null
+                    || !_accessionNumbers.TryGetValue(row.AccessionId.Value, out var number)
+                    || string.IsNullOrWhiteSpace(number)
+                    || string.Equals(row.AccessionNumber, number, StringComparison.Ordinal))
+                    continue;
+
+                row.AccessionNumber = number;
+                changed = true;
+            }
+
+            if (changed)
+                await _db.SaveChangesAsync(cancellationToken);
         }
 
         private async Task ApplySentNamesAsync(IReadOnlyList<HiwuCoflSampleRow> rows, CancellationToken cancellationToken)

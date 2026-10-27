@@ -5,14 +5,15 @@ namespace CAHFS_Recharges.Hiwu
         public Guid FileId { get; set; }
         public string SampleKey { get; set; } = "";
         public long? AccessionId { get; set; }
+
+        /// TraceFirst human-readable accession label when known (persisted; never invented).
+        public string? AccessionNumber { get; set; }
+
         public long? AnimalId { get; set; }
         public long? SpecimenId { get; set; }
         public string Status { get; set; } = HiwuCoflSampleStatus.NotStarted;
         public string? ErrorMessage { get; set; }
         public DateTime UpdatedUtc { get; set; }
-
-        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
-        public string? AccessionNumber { get; set; }
 
         [System.ComponentModel.DataAnnotations.Schema.NotMapped]
         public string? AnimalLabel { get; set; }

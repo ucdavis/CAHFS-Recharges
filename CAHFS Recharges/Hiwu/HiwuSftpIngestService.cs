@@ -37,6 +37,7 @@ namespace CAHFS_Recharges.Hiwu
             }
 
             await ParseStoredFilesAsync(cancellationToken);
+            await _repository.BackfillSampleIndexAsync(cancellationToken);
 
             var run = new HiwuIngestRun
             {
@@ -176,6 +177,7 @@ namespace CAHFS_Recharges.Hiwu
 
             var xml = Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF');
             var parsed = _parser.Parse(fileName, xml);
+            var sampleIds = ReadSampleIds(xml, out var sampleCount);
             Guid? originalFileId = null;
             if (parsed.IsAmendment && !string.IsNullOrEmpty(parsed.OriginalNamePrefix))
             {
@@ -189,6 +191,7 @@ namespace CAHFS_Recharges.Hiwu
                 RemoteFileName = fileName,
                 ReceivedUtc = DateTime.UtcNow,
                 RawXml = xml,
+                SampleCount = sampleCount,
                 SizeBytes = bytes.LongLength,
                 ContentHash = hash,
                 ParseStatus = parsed.Status,
@@ -200,6 +203,8 @@ namespace CAHFS_Recharges.Hiwu
             try
             {
                 await _repository.AddFileAsync(file, cancellationToken);
+                await _repository.SaveChangesAsync(cancellationToken);
+                await _repository.ReplaceImportSamplesAsync(file.FileId, sampleIds, cancellationToken);
                 await _repository.SaveChangesAsync(cancellationToken);
                 run.FilesStored++;
             }
@@ -225,6 +230,9 @@ namespace CAHFS_Recharges.Hiwu
                 file.ParseStatus = parsed.Status;
                 file.ParseError = string.IsNullOrEmpty(parsed.ParseError) ? null : Trim(parsed.ParseError);
                 file.IsAmendment = parsed.IsAmendment;
+                var sampleIds = ReadSampleIds(file.RawXml, out var sampleCount);
+                file.SampleCount = sampleCount;
+                await _repository.ReplaceImportSamplesAsync(file.FileId, sampleIds, cancellationToken);
             }
 
             if (stored.Count > 0)
@@ -333,6 +341,21 @@ namespace CAHFS_Recharges.Hiwu
             var message = ex.InnerException?.Message ?? ex.Message;
             return message.Contains("UX_C_HIWU_Import_File_ContentHash", StringComparison.OrdinalIgnoreCase)
                 || message.Contains("ContentHash", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static IReadOnlyList<string> ReadSampleIds(string xml, out int sampleCount)
+        {
+            if (!HiwuManifestDocument.TryRead(xml, out var document))
+            {
+                sampleCount = 0;
+                return [];
+            }
+
+            sampleCount = document.Samples.Count;
+            var ids = new List<string>(sampleCount);
+            for (var index = 0; index < document.Samples.Count; index++)
+                ids.Add(HiwuCoflFileOrderService.SampleKey(document.Samples[index], index));
+            return ids;
         }
 
         private static string Trim(string value)

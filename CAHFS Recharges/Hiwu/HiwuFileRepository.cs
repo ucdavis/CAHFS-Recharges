@@ -55,6 +55,55 @@ namespace CAHFS_Recharges.Hiwu
             _db.Entry(file).State = EntityState.Detached;
         }
 
+        public async Task ReplaceImportSamplesAsync(
+            Guid fileId,
+            IReadOnlyList<string> sampleIds,
+            CancellationToken cancellationToken = default)
+        {
+            var existing = await _db.ImportSamples.Where(row => row.FileId == fileId).ToListAsync(cancellationToken);
+            if (existing.Count > 0)
+                _db.ImportSamples.RemoveRange(existing);
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var sampleId in sampleIds)
+            {
+                var id = sampleId.Trim();
+                if (id.Length == 0 || id.Length > 100 || !seen.Add(id))
+                    continue;
+                _db.ImportSamples.Add(new HiwuImportSample { FileId = fileId, SampleId = id });
+            }
+        }
+
+        public async Task BackfillSampleIndexAsync(CancellationToken cancellationToken = default)
+        {
+            // Prefer files that look like they have samples but SampleCount was never set
+            // (amended/received already in DB before SampleCount shipped). Avoid brittle "<sample"
+            // string match — namespaced XML often uses prefixes.
+            var files = await _db.ImportFiles
+                .Where(file => file.SampleCount == 0)
+                .OrderByDescending(file => file.ReceivedUtc)
+                .Take(500)
+                .ToListAsync(cancellationToken);
+
+            var updated = 0;
+            foreach (var file in files)
+            {
+                if (!HiwuManifestDocument.TryRead(file.RawXml, out var document) || document.Samples.Count == 0)
+                    continue;
+
+                var sampleIds = new List<string>(document.Samples.Count);
+                for (var index = 0; index < document.Samples.Count; index++)
+                    sampleIds.Add(HiwuCoflFileOrderService.SampleKey(document.Samples[index], index));
+
+                file.SampleCount = document.Samples.Count;
+                await ReplaceImportSamplesAsync(file.FileId, sampleIds, cancellationToken);
+                updated++;
+            }
+
+            if (updated > 0)
+                await _db.SaveChangesAsync(cancellationToken);
+        }
+
         public Task AddIngestRunAsync(HiwuIngestRun run, CancellationToken cancellationToken = default)
         {
             return _db.IngestRuns.AddAsync(run, cancellationToken).AsTask();

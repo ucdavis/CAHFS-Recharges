@@ -389,9 +389,12 @@ namespace CAHFS_Recharges.Services
 
                 var udfTestCode = SafeTrim(i.TestCode, 50);
                 var udfTestName = SafeTrim(i.TestName, 50);
-                // Accession# / FolderNo = first 8 chars of Original Doc #; Submitter ID = clientID
+                // Accession# / FolderNo = first 8 chars of Original Doc #;
+                // Submitter name = Client_Name, else Organization_Name (same as COA Validations display)
                 var udfFolderNo = SafeTrim(FolderNoFromDocNumber(i.OrignalDocNumber), 50);
-                var udfSubmitterId = SafeTrim(i.ClientID, 50);
+                var udfSubmitterName = SafeTrim(
+                    !string.IsNullOrWhiteSpace(i.ClientName) ? i.ClientName : i.OrganizationName,
+                    50);
 
                 var desc = BuildLineDescription(i, integration); // max 100
 
@@ -425,7 +428,7 @@ namespace CAHFS_Recharges.Services
                         UdfString1 = udfTestCode,
                         UdfString2 = udfTestName,
                         UdfString3 = udfFolderNo,
-                        UdfString4 = udfSubmitterId
+                        UdfString4 = udfSubmitterName
                     }
                 };
 
@@ -455,7 +458,7 @@ namespace CAHFS_Recharges.Services
                         UdfString1 = udfTestCode,
                         UdfString2 = udfTestName,
                         UdfString3 = udfFolderNo,
-                        UdfString4 = udfSubmitterId
+                        UdfString4 = udfSubmitterName
                     }
                 };
             }

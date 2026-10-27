@@ -78,6 +78,13 @@ namespace CAHFS_Recharges.Hiwu
                     document.Mission[child.Name.LocalName] = child.Value.Trim();
                 }
 
+                // Some amended payloads nest sample nodes differently; still count them for SampleCount/search.
+                if (document.Samples.Count == 0)
+                {
+                    foreach (var sample in root.Descendants().Where(e => e.Name.LocalName == "sample"))
+                        document.Samples.Add(ReadSample(sample));
+                }
+
                 return true;
             }
             catch (System.Xml.XmlException)

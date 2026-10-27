@@ -16,6 +16,13 @@ namespace CAHFS_Recharges.Hiwu
 
         void Detach(HiwuImportFile file);
 
+        Task ReplaceImportSamplesAsync(
+            Guid fileId,
+            IReadOnlyList<string> sampleIds,
+            CancellationToken cancellationToken = default);
+
+        Task BackfillSampleIndexAsync(CancellationToken cancellationToken = default);
+
         Task AddIngestRunAsync(HiwuIngestRun run, CancellationToken cancellationToken = default);
 
         Task SaveChangesAsync(CancellationToken cancellationToken = default);

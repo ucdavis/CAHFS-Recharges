@@ -10,6 +10,9 @@ namespace CAHFS_Recharges.Hiwu
 
         public string RawXml { get; set; } = "";
 
+        /// Sample rows in the manifest (set at ingest). Used on the files list without loading RawXml.
+        public int SampleCount { get; set; }
+
         public long SizeBytes { get; set; }
 
         public string ContentHash { get; set; } = "";

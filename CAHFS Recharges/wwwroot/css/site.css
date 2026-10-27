@@ -243,6 +243,20 @@ small, .text-sm {
   transition: var(--caei-spring);
 }
 
+/* HIWU global search: inherit Aggie Gold focus ring; theme accents via layout tokens only */
+.caei-global-search .form-control:focus,
+.caei-global-search .form-control:focus-visible {
+  outline: none;
+  border-color: var(--brand-secondary, #ffbf00);
+  background-color: var(--brand-secondary-20, #fffbed);
+  box-shadow: 0 0 0 3px rgba(255, 191, 0, 0.4);
+}
+
+.caei-global-search .btn-primary.is-loading {
+  background-color: var(--theme-primary);
+  border-color: var(--theme-primary);
+}
+
 .form-check-input {
   box-shadow: 0 0 0 0 rgba(255, 191, 0, 0);
   transition: var(--caei-spring);

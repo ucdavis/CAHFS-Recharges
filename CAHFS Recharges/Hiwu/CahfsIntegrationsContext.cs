@@ -14,6 +14,8 @@ namespace CAHFS_Recharges.Hiwu
 
         public DbSet<HiwuImportFile> ImportFiles { get; set; } = null!;
 
+        public DbSet<HiwuImportSample> ImportSamples { get; set; } = null!;
+
         public DbSet<HiwuIngestRun> IngestRuns { get; set; } = null!;
 
         public DbSet<HiwuCoflSampleRow> CoflSamples { get; set; } = null!;

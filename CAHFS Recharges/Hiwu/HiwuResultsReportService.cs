@@ -56,6 +56,15 @@ namespace CAHFS_Recharges.Hiwu
                         continue;
 
                     var resultsRef = await _client.GetAccessionNumberAsync(accessionId.Value, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(resultsRef))
+                    {
+                        foreach (var sample in samples)
+                        {
+                            if (string.IsNullOrWhiteSpace(sample.AccessionNumber))
+                                sample.AccessionNumber = resultsRef;
+                        }
+                    }
+
                     var ready = HiwuResultsReportBuilder.TryBuild(published.Body, samples, resultsRef, out var xml, out var error);
                     var row = await _db.Reports.FirstOrDefaultAsync(report => report.FileId == file.FileId, cancellationToken);
                     if (row == null)

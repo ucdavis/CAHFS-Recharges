@@ -84,7 +84,13 @@
                                 <a class="caei-data-key" href="@(pathBase)@IntegrationLinkHelper.AppendHiwuReturn($"/Integrations/EQUINE/Hiwu/Create/Review?id={item.FileId:D}", listReturn)">@item.FileName</a>
                             </td>
                             <td>@CreateModel.ToPacific(item.ReceivedUtc).ToString("yyyy-MM-dd HH:mm")</td>
-                            <td>@item.SampleCount</td>
+                            <td>
+                                <span>@item.SampleCount</span>
+                                @if (item.HasBSample)
+                                {
+                                    <span class="caei-badge-b-sample caei-badge-b-sample-inline" title="B-Sample test requested">⚠ B-Sample</span>
+                                }
+                            </td>
                             <td><span class="badge @HiwuCoflSampleStatus.BadgeClass(item.TraceFirstStatus)">@item.TraceFirstStatus</span></td>
                             <td>@item.NextStep</td>
                         </tr>

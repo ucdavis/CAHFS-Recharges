@@ -402,10 +402,11 @@ namespace CAHFS_Recharges.Hiwu
         {
             var type = Field(sample, "sampleType");
             var point = Field(sample, "collectionPoint");
+            var skipTests = HiwuManifestDocument.IsBSampleRequested(sample);
             if (catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.SexCodesList)
                 || catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.SpecimenTypesList)
                 || catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.SpecimenDescriptionsList)
-                || catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.TestSchedulesList)
+                || (!skipTests && catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.TestSchedulesList))
                 || catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.Breeds)
                 || catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.AgeUnits))
                 return (null, null);
@@ -419,19 +420,22 @@ namespace CAHFS_Recharges.Hiwu
             if (specimenTypeId == null)
                 return (null, sampleKey + " specimen type " + type + " was not found.");
 
-            var description = point + (Lasix(sample) ? " With Lasix" : "");
+            var description = SpecimenDescription(sample, point);
             var descriptionId = HiwuCoflCatalog.MatchForType(catalog.SpecimenDescriptions, description, specimenTypeId, catalog.SpecimenTypes);
             if (descriptionId == null)
                 return (null, sampleKey + " specimen description " + description + " was not found.");
 
-            var panels = Panels(type, point);
+            // B-Sample: create animal/specimen only — same as type/point combos with no panel mapping.
             var testIds = new List<long>();
-            foreach (var panel in panels)
+            if (!skipTests)
             {
-                var id = catalog.MatchPanel(panel);
-                if (id == null)
-                    return (null, sampleKey + " test schedule " + panel + " was not found.");
-                testIds.Add(id.Value);
+                foreach (var panel in Panels(type, point))
+                {
+                    var id = catalog.MatchPanel(panel);
+                    if (id == null)
+                        return (null, sampleKey + " test schedule " + panel + " was not found.");
+                    testIds.Add(id.Value);
+                }
             }
 
             var externalRef = Field(sample, "externalRef");
@@ -494,6 +498,15 @@ namespace CAHFS_Recharges.Hiwu
             if (type == "OTHER" && point == "EVIDENCE")
                 return ["E606"];
             return [];
+        }
+
+        /// TraceFirst specimen_type_descriptions: B Sample / B Sample With Lasix (same Lasix pattern as A-sample).
+        public static string SpecimenDescription(HiwuSampleDocument sample, string collectionPoint)
+        {
+            if (HiwuManifestDocument.IsBSampleRequested(sample))
+                return Lasix(sample) ? "B Sample With Lasix" : "B Sample";
+
+            return collectionPoint + (Lasix(sample) ? " With Lasix" : "");
         }
 
         private static bool Lasix(HiwuSampleDocument sample) => Flag(sample, "lasix");

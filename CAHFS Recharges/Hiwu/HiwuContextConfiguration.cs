@@ -24,6 +24,7 @@ namespace CAHFS_Recharges.Hiwu
                 entity.Property(e => e.ReceivedUtc).HasColumnType("datetime2(3)");
                 entity.Property(e => e.RawXml).HasColumnType("nvarchar(max)").IsRequired();
                 entity.Property(e => e.SampleCount).IsRequired();
+                entity.Property(e => e.HasBSample);
                 entity.Property(e => e.ContentHash).HasMaxLength(64).IsFixedLength().IsRequired();
                 entity.Property(e => e.ParseStatus).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.ParseError).HasMaxLength(500);

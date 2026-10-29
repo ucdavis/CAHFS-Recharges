@@ -110,6 +110,15 @@ namespace CAHFS_Recharges.Hiwu
             return value;
         }
 
+        public static bool IsBSampleRequested(HiwuSampleDocument sample)
+        {
+            sample.Fields.TryGetValue("BSampleTestRequested", out var value);
+            return string.Equals(Display("BSampleTestRequested", value), "Yes", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool AnyBSampleRequested(HiwuManifestDocument document) =>
+            document.Samples.Any(IsBSampleRequested);
+
         public List<HiwuFieldCompare> CompareMission(HiwuManifestDocument original)
         {
             return CompareFields(MissionFields, Mission, original.Mission);

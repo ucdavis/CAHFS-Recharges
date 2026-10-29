@@ -6,6 +6,7 @@ namespace CAHFS_Recharges.Hiwu
         public string FileName { get; init; } = "";
         public DateTime ReceivedUtc { get; init; }
         public int SampleCount { get; init; }
+        public bool HasBSample { get; init; }
         public string TraceFirstStatus { get; init; } = "";
         public string NextStep { get; init; } = "";
     }
@@ -20,6 +21,7 @@ namespace CAHFS_Recharges.Hiwu
     public sealed class HiwuCoflSampleReview
     {
         public string SampleKey { get; init; } = "";
+        public bool IsBSample { get; init; }
         public string Status { get; init; } = HiwuCoflSampleStatus.NotStarted;
         public long? AccessionId { get; init; }
         public string? AccessionNumber { get; init; }
@@ -111,6 +113,7 @@ namespace CAHFS_Recharges.Hiwu
                 samples.Add(new HiwuCoflSampleReview
                 {
                     SampleKey = key,
+                    IsBSample = HiwuManifestDocument.IsBSampleRequested(sample),
                     Status = existing?.Status ?? HiwuCoflSampleStatus.NotStarted,
                     AccessionId = existing?.AccessionId,
                     AccessionNumber = existing?.AccessionNumber,
@@ -149,19 +152,21 @@ namespace CAHFS_Recharges.Hiwu
             var type = Field(sample.Fields, "sampleType");
             var point = Field(sample.Fields, "collectionPoint");
             var gender = Field(sample.Fields, "gender");
-            var description = point + (Lasix(sample) ? " With Lasix" : "");
+            var description = HiwuCoflSampleMapper.SpecimenDescription(sample, point);
+            var skipTests = HiwuManifestDocument.IsBSampleRequested(sample);
             var sexFailed = catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.SexCodesList, out var sexError);
             var typeFailed = catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.SpecimenTypesList, out var typeError);
             var descriptionFailed = catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.SpecimenDescriptionsList, out var descriptionError);
-            var testsFailed = catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.TestSchedulesList, out var testsError);
+            var testsLookupFailed = catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.TestSchedulesList, out var testsError);
+            var testsFailed = !skipTests && testsLookupFailed;
             var sexId = sexFailed ? null : HiwuCoflCatalog.Match(catalog.SexCodes, gender);
             var specimenTypeId = typeFailed ? null : HiwuCoflCatalog.Match(catalog.SpecimenTypes, type);
             var descriptionId = descriptionFailed ? null : HiwuCoflCatalog.MatchForType(catalog.SpecimenDescriptions, description, specimenTypeId, catalog.SpecimenTypes);
-            var panels = HiwuCoflSampleMapper.Panels(type, point);
+            var panels = skipTests ? Array.Empty<string>() : HiwuCoflSampleMapper.Panels(type, point);
             var tests = new List<string>();
             if (testsFailed)
                 tests.Add(testsError!);
-            else
+            else if (!skipTests)
             {
                 foreach (var panel in panels)
                 {
@@ -195,6 +200,11 @@ namespace CAHFS_Recharges.Hiwu
 
             var externalRef = Field(sample.Fields, "externalRef");
             var animalName = string.IsNullOrWhiteSpace(externalRef) ? sample.SampleId : externalRef;
+            var testScheduleValue = skipTests
+                ? "Tests will not be assigned (B-Sample)."
+                : tests.Count == 0
+                    ? "Tests will not be assigned."
+                    : string.Join(", ", tests);
 
             return
             [
@@ -207,7 +217,7 @@ namespace CAHFS_Recharges.Hiwu
                 Line("Collection point", "Specimen description", descriptionFailed ? descriptionError! : descriptionId == null ? description + " was not found." : description + " (" + descriptionId + ")"),
                 Line("Sampled date", "Collection date", Display(Field(sample.Fields, "sampledDate"))),
                 Line("Optional comment", "Case coordinator comment", Display(Field(sample.Fields, "optionalComment"))),
-                Line("Collection point and sample type", "Test schedule", tests.Count == 0 ? "Tests will not be assigned." : string.Join(", ", tests))
+                Line("Collection point and sample type", "Test schedule", testScheduleValue)
             ];
         }
 
@@ -255,13 +265,5 @@ namespace CAHFS_Recharges.Hiwu
 
         private static string Field(Dictionary<string, string> fields, string name) =>
             fields.TryGetValue(name, out var value) ? value.Trim() : "";
-
-        private static bool Lasix(HiwuSampleDocument sample) => Flag(sample, "lasix");
-
-        private static bool Flag(HiwuSampleDocument sample, string name)
-        {
-            var value = Field(sample.Fields, name);
-            return value is "1" or "true";
-        }
     }
 }

@@ -54,11 +54,26 @@
             <tbody>
                 @foreach (var sample in document.Samples)
                 {
-                    <tr>
+                    var isBSample = HiwuManifestDocument.IsBSampleRequested(sample);
+                    <tr class="@(isBSample ? "caei-row-b-sample" : null)">
                         @foreach (var column in Model.SampleColumns)
                         {
                             sample.Fields.TryGetValue(column, out var value);
-                            <td>@HiwuManifestDocument.Display(column, value)</td>
+                            var display = HiwuManifestDocument.Display(column, value);
+                            if (string.Equals(column, "sampleId", StringComparison.Ordinal))
+                            {
+                                <td>
+                                    <span class="caei-data-key">@display</span>
+                                    @if (isBSample)
+                                    {
+                                        <span class="caei-badge-b-sample" title="B-Sample test requested">⚠ B-Sample</span>
+                                    }
+                                </td>
+                            }
+                            else
+                            {
+                                <td>@display</td>
+                            }
                         }
                     </tr>
                 }

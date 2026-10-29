@@ -84,7 +84,13 @@ else if (review != null)
             {
                 <div class="card mb-3">
                     <div class="card-body">
-                        <h2 class="h5 mb-2"><span class="caei-data-key">@sample.SampleKey</span></h2>
+                        <h2 class="h5 mb-2">
+                            <span class="caei-data-key">@sample.SampleKey</span>
+                            @if (sample.IsBSample)
+                            {
+                                <span class="caei-badge-b-sample" title="B-Sample test requested">⚠ B-Sample</span>
+                            }
+                        </h2>
                         <p class="mb-2">
                             <span class="badge @HiwuCoflSampleStatus.BadgeClass(sample.Status)">@sample.Status</span>
                         </p>

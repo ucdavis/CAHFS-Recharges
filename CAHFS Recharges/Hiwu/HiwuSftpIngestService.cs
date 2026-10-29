@@ -177,7 +177,7 @@ namespace CAHFS_Recharges.Hiwu
 
             var xml = Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF');
             var parsed = _parser.Parse(fileName, xml);
-            var sampleIds = ReadSampleIds(xml, out var sampleCount);
+            var sampleIds = ReadSampleIds(xml, out var sampleCount, out var hasBSample);
             Guid? originalFileId = null;
             if (parsed.IsAmendment && !string.IsNullOrEmpty(parsed.OriginalNamePrefix))
             {
@@ -192,6 +192,7 @@ namespace CAHFS_Recharges.Hiwu
                 ReceivedUtc = DateTime.UtcNow,
                 RawXml = xml,
                 SampleCount = sampleCount,
+                HasBSample = hasBSample,
                 SizeBytes = bytes.LongLength,
                 ContentHash = hash,
                 ParseStatus = parsed.Status,
@@ -230,8 +231,9 @@ namespace CAHFS_Recharges.Hiwu
                 file.ParseStatus = parsed.Status;
                 file.ParseError = string.IsNullOrEmpty(parsed.ParseError) ? null : Trim(parsed.ParseError);
                 file.IsAmendment = parsed.IsAmendment;
-                var sampleIds = ReadSampleIds(file.RawXml, out var sampleCount);
+                var sampleIds = ReadSampleIds(file.RawXml, out var sampleCount, out var hasBSample);
                 file.SampleCount = sampleCount;
+                file.HasBSample = hasBSample;
                 await _repository.ReplaceImportSamplesAsync(file.FileId, sampleIds, cancellationToken);
             }
 
@@ -343,15 +345,17 @@ namespace CAHFS_Recharges.Hiwu
                 || message.Contains("ContentHash", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static IReadOnlyList<string> ReadSampleIds(string xml, out int sampleCount)
+        private static IReadOnlyList<string> ReadSampleIds(string xml, out int sampleCount, out bool hasBSample)
         {
             if (!HiwuManifestDocument.TryRead(xml, out var document))
             {
                 sampleCount = 0;
+                hasBSample = false;
                 return [];
             }
 
             sampleCount = document.Samples.Count;
+            hasBSample = HiwuManifestDocument.AnyBSampleRequested(document);
             var ids = new List<string>(sampleCount);
             for (var index = 0; index < document.Samples.Count; index++)
                 ids.Add(HiwuCoflFileOrderService.SampleKey(document.Samples[index], index));

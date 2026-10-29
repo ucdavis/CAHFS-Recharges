@@ -79,8 +79,10 @@ namespace CAHFS_Recharges.Hiwu
             // Prefer files that look like they have samples but SampleCount was never set
             // (amended/received already in DB before SampleCount shipped). Avoid brittle "<sample"
             // string match — namespaced XML often uses prefixes.
+            // Also evaluate HasBSample once for legacy rows (NULL = not checked yet).
+            // B-Sample is not on C_HIWU_Cofl_Sample — only the manifest / Import_File flag.
             var files = await _db.ImportFiles
-                .Where(file => file.SampleCount == 0)
+                .Where(file => file.SampleCount == 0 || file.HasBSample == null)
                 .OrderByDescending(file => file.ReceivedUtc)
                 .Take(500)
                 .ToListAsync(cancellationToken);
@@ -88,15 +90,29 @@ namespace CAHFS_Recharges.Hiwu
             var updated = 0;
             foreach (var file in files)
             {
-                if (!HiwuManifestDocument.TryRead(file.RawXml, out var document) || document.Samples.Count == 0)
+                if (!HiwuManifestDocument.TryRead(file.RawXml, out var document))
+                {
+                    if (file.HasBSample == null)
+                    {
+                        file.HasBSample = false;
+                        updated++;
+                    }
                     continue;
+                }
 
-                var sampleIds = new List<string>(document.Samples.Count);
-                for (var index = 0; index < document.Samples.Count; index++)
-                    sampleIds.Add(HiwuCoflFileOrderService.SampleKey(document.Samples[index], index));
+                var hasBSample = HiwuManifestDocument.AnyBSampleRequested(document);
+                if (document.Samples.Count > 0 && file.SampleCount == 0)
+                {
+                    var sampleIds = new List<string>(document.Samples.Count);
+                    for (var index = 0; index < document.Samples.Count; index++)
+                        sampleIds.Add(HiwuCoflFileOrderService.SampleKey(document.Samples[index], index));
 
-                file.SampleCount = document.Samples.Count;
-                await ReplaceImportSamplesAsync(file.FileId, sampleIds, cancellationToken);
+                    file.SampleCount = document.Samples.Count;
+                    await ReplaceImportSamplesAsync(file.FileId, sampleIds, cancellationToken);
+                }
+
+                if (file.HasBSample != hasBSample)
+                    file.HasBSample = hasBSample;
                 updated++;
             }
 

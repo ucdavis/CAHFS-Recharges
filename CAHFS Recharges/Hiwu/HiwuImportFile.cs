@@ -13,6 +13,9 @@ namespace CAHFS_Recharges.Hiwu
         /// Sample rows in the manifest (set at ingest). Used on the files list without loading RawXml.
         public int SampleCount { get; set; }
 
+        /// True when any sample has BSampleTestRequested = Yes. Null = not evaluated yet (legacy rows).
+        public bool? HasBSample { get; set; }
+
         public long SizeBytes { get; set; }
 
         public string ContentHash { get; set; } = "";

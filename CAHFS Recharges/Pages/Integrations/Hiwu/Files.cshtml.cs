@@ -75,13 +75,14 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
             var sheet = workbook.Worksheets.Add("Manifest files");
             sheet.Cell(1, 1).Value = "File name";
             sheet.Cell(1, 2).Value = "Samples";
-            sheet.Cell(1, 3).Value = "Date downloaded";
-            sheet.Cell(1, 4).Value = "Status";
+            sheet.Cell(1, 3).Value = "Has B-Sample";
+            sheet.Cell(1, 4).Value = "Date downloaded";
+            sheet.Cell(1, 5).Value = "Status";
             var amendedExport = string.Equals(Status, HiwuParseStatus.Amended, StringComparison.OrdinalIgnoreCase);
-            sheet.Cell(1, 5).Value = "TraceFirst";
+            sheet.Cell(1, 6).Value = "TraceFirst";
             if (amendedExport)
-                sheet.Cell(1, 6).Value = "Reviewed";
-            var header = sheet.Range(1, 1, 1, amendedExport ? 6 : 5);
+                sheet.Cell(1, 7).Value = "Reviewed";
+            var header = sheet.Range(1, 1, 1, amendedExport ? 7 : 6);
             header.Style.Font.Bold = true;
             header.Style.Fill.BackgroundColor = XLColor.LightGray;
 
@@ -90,11 +91,12 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
             {
                 sheet.Cell(row, 1).Value = file.RemoteFileName;
                 sheet.Cell(row, 2).Value = file.SampleCount;
-                sheet.Cell(row, 3).Value = ToPacific(file.ReceivedUtc).ToString("yyyy-MM-dd HH:mm");
-                sheet.Cell(row, 4).Value = HiwuParseStatus.Label(file.ParseStatus);
-                sheet.Cell(row, 5).Value = traceFirst.TryGetValue(file.FileId, out var traceStatus) ? traceStatus : "Not started";
+                sheet.Cell(row, 3).Value = file.HasBSample == true ? "Yes" : "";
+                sheet.Cell(row, 4).Value = ToPacific(file.ReceivedUtc).ToString("yyyy-MM-dd HH:mm");
+                sheet.Cell(row, 5).Value = HiwuParseStatus.Label(file.ParseStatus);
+                sheet.Cell(row, 6).Value = traceFirst.TryGetValue(file.FileId, out var traceStatus) ? traceStatus : "Not started";
                 if (amendedExport)
-                    sheet.Cell(row, 6).Value = ReviewProgress.TryGetValue(file.FileId, out var reviewed) ? reviewed.Label : "";
+                    sheet.Cell(row, 7).Value = ReviewProgress.TryGetValue(file.FileId, out var reviewed) ? reviewed.Label : "";
                 row++;
             }
 

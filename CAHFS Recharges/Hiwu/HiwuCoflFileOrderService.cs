@@ -99,13 +99,17 @@ namespace CAHFS_Recharges.Hiwu
                 .Select(file =>
                 {
                     var status = statuses[file.FileId];
-                    var count = HiwuManifestDocument.TryRead(file.RawXml, out var document) ? document.Samples.Count : 0;
+                    var parsed = HiwuManifestDocument.TryRead(file.RawXml, out var document);
+                    var count = parsed ? document.Samples.Count : 0;
+                    var hasBSample = file.HasBSample == true
+                        || (parsed && HiwuManifestDocument.AnyBSampleRequested(document));
                     return new HiwuCoflWorkItem
                     {
                         FileId = file.FileId,
                         FileName = file.RemoteFileName,
                         ReceivedUtc = file.ReceivedUtc,
                         SampleCount = count,
+                        HasBSample = hasBSample,
                         TraceFirstStatus = status,
                         NextStep = status == HiwuCoflSampleStatus.Partial
                             ? "Continue the remaining samples"
@@ -356,7 +360,7 @@ namespace CAHFS_Recharges.Hiwu
                     ? HiwuCoflSampleStatus.Partial
                     : HiwuCoflSampleStatus.Failed;
             if (row.Status == HiwuCoflSampleStatus.Imported && !testsRequired)
-                row.ErrorMessage = "Tests were not assigned for this collection point.";
+                row.ErrorMessage = "Tests were not assigned.";
         }
 
         private static HiwuCoflOrderSample WithAnimal(HiwuCoflOrderSample sample, long animalId) =>

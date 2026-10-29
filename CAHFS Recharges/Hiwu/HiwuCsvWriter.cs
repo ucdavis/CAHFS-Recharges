@@ -36,11 +36,27 @@ namespace CAHFS_Recharges.Hiwu
 
         private static string Value(HiwuManifestDocument document, HiwuSampleDocument sample, string column)
         {
+            string raw;
             if (sample.Fields.TryGetValue(column, out var sampleValue))
-                return sampleValue;
-            if (document.Mission.TryGetValue(column, out var missionValue))
-                return missionValue;
-            return "";
+                raw = sampleValue;
+            else if (document.Mission.TryGetValue(column, out var missionValue))
+                raw = missionValue;
+            else
+                raw = "";
+
+            if (string.Equals(column, "sampleId", StringComparison.Ordinal)
+                && sample.Fields.TryGetValue("BSampleTestRequested", out var bSample)
+                && string.Equals(
+                    HiwuManifestDocument.Display("BSampleTestRequested", bSample),
+                    "Yes",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return string.IsNullOrEmpty(raw)
+                    ? "[B-SAMPLE REQUIRED]"
+                    : raw + " [B-SAMPLE REQUIRED]";
+            }
+
+            return raw;
         }
 
         private static string Quote(string value)

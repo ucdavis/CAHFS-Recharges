@@ -41,6 +41,7 @@ namespace CAHFS_Recharges.Hiwu
                     file.RemoteFileName,
                     file.ReceivedUtc,
                     file.SampleCount,
+                    file.HasBSample,
                     file.SizeBytes,
                     file.ContentHash,
                     file.ParseStatus,
@@ -57,6 +58,7 @@ namespace CAHFS_Recharges.Hiwu
                 ReceivedUtc = file.ReceivedUtc,
                 RawXml = "",
                 SampleCount = file.SampleCount,
+                HasBSample = file.HasBSample,
                 SizeBytes = file.SizeBytes,
                 ContentHash = file.ContentHash,
                 ParseStatus = file.ParseStatus,
@@ -127,12 +129,15 @@ namespace CAHFS_Recharges.Hiwu
             }
         }
 
-        /// When SampleCount was never backfilled, parse RawXml for the current page and persist.
+        /// When SampleCount / HasBSample was never backfilled, parse RawXml for the current page and persist.
         private async Task FillMissingSampleCountsAsync(
             List<HiwuImportFile> list,
             CancellationToken cancellationToken)
         {
-            var missingIds = list.Where(file => file.SampleCount <= 0).Select(file => file.FileId).ToList();
+            var missingIds = list
+                .Where(file => file.SampleCount <= 0 || file.HasBSample == null)
+                .Select(file => file.FileId)
+                .ToList();
             if (missingIds.Count == 0)
                 return;
 
@@ -143,30 +148,52 @@ namespace CAHFS_Recharges.Hiwu
             var changed = false;
             foreach (var entity in tracked)
             {
-                if (!HiwuManifestDocument.TryRead(entity.RawXml, out var document) || document.Samples.Count == 0)
-                    continue;
-
-                var count = document.Samples.Count;
-                entity.SampleCount = count;
-                changed = true;
-
-                var row = list.FirstOrDefault(file => file.FileId == entity.FileId);
-                if (row != null)
-                    row.SampleCount = count;
-
-                var existing = await _db.ImportSamples
-                    .Where(sample => sample.FileId == entity.FileId)
-                    .ToListAsync(cancellationToken);
-                if (existing.Count > 0)
-                    _db.ImportSamples.RemoveRange(existing);
-
-                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                for (var index = 0; index < document.Samples.Count; index++)
+                if (!HiwuManifestDocument.TryRead(entity.RawXml, out var document))
                 {
-                    var id = HiwuCoflFileOrderService.SampleKey(document.Samples[index], index).Trim();
-                    if (id.Length == 0 || id.Length > 100 || !seen.Add(id))
-                        continue;
-                    _db.ImportSamples.Add(new HiwuImportSample { FileId = entity.FileId, SampleId = id });
+                    if (entity.HasBSample == null)
+                    {
+                        entity.HasBSample = false;
+                        changed = true;
+                        var blank = list.FirstOrDefault(file => file.FileId == entity.FileId);
+                        if (blank != null)
+                            blank.HasBSample = false;
+                    }
+                    continue;
+                }
+
+                var hasBSample = HiwuManifestDocument.AnyBSampleRequested(document);
+                var row = list.FirstOrDefault(file => file.FileId == entity.FileId);
+
+                if (document.Samples.Count > 0 && entity.SampleCount <= 0)
+                {
+                    var count = document.Samples.Count;
+                    entity.SampleCount = count;
+                    changed = true;
+                    if (row != null)
+                        row.SampleCount = count;
+
+                    var existing = await _db.ImportSamples
+                        .Where(sample => sample.FileId == entity.FileId)
+                        .ToListAsync(cancellationToken);
+                    if (existing.Count > 0)
+                        _db.ImportSamples.RemoveRange(existing);
+
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    for (var index = 0; index < document.Samples.Count; index++)
+                    {
+                        var id = HiwuCoflFileOrderService.SampleKey(document.Samples[index], index).Trim();
+                        if (id.Length == 0 || id.Length > 100 || !seen.Add(id))
+                            continue;
+                        _db.ImportSamples.Add(new HiwuImportSample { FileId = entity.FileId, SampleId = id });
+                    }
+                }
+
+                if (entity.HasBSample != hasBSample)
+                {
+                    entity.HasBSample = hasBSample;
+                    changed = true;
+                    if (row != null)
+                        row.HasBSample = hasBSample;
                 }
             }
 

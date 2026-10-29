@@ -201,7 +201,13 @@ else
                             <td>
                                 <a class="caei-data-key" href="@(pathBase)@IntegrationLinkHelper.AppendHiwuReturn(IntegrationLinkHelper.GetHiwuFileDetailPage(file.FileId), listReturn)">@file.RemoteFileName</a>
                             </td>
-                            <td>@file.SampleCount</td>
+                            <td>
+                                <span>@file.SampleCount</span>
+                                @if (file.HasBSample == true)
+                                {
+                                    <span class="caei-badge-b-sample caei-badge-b-sample-inline" title="B-Sample test requested">⚠ B-Sample</span>
+                                }
+                            </td>
                             <td>@FilesModel.ToPacific(file.ReceivedUtc).ToString("yyyy-MM-dd HH:mm")</td>
                             <td>
                                 <span class="badge @hiwuStatusClass d-inline-flex align-items-center gap-1">

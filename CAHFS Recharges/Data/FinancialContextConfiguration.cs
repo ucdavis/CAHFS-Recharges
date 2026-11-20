@@ -46,6 +46,7 @@ namespace CAHFS_Recharges.Data
                 entity.Property(e => e.BatchID).HasColumnName("batchID").IsRequired();
                 entity.Property(e => e.TransactionDate).HasColumnName("transactionDate").HasColumnType("datetime").IsRequired();
                 entity.Property(e => e.OrignalDocNumber).HasColumnName("orginalDocNumber").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.AccessionNumber).HasColumnName("AccessionNumber").HasMaxLength(50);
                 entity.Property(e => e.ClientID).HasColumnName("clientID").HasMaxLength(50);
                 entity.Property(e => e.ClientName).HasColumnName("Client_Name").HasMaxLength(50);
                 entity.Property(e => e.OrganizationName).HasColumnName("Organization_Name").HasMaxLength(100);

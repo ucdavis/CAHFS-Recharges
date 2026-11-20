@@ -1,0 +1,87 @@
+/*
+  Diagnose NULL AccessionNumber for given orginalDocNumber (SOPNUMBE) values.
+  Run on the company DB that owns the batch (gpare Equine or gparc CAHFS).
+*/
+
+DECLARE @Docs TABLE (SOPNUMBE char(21) NOT NULL);
+INSERT INTO @Docs (SOPNUMBE) VALUES
+ ('INV00000000002273'),
+ ('INV00000000002274'),
+ ('INV00000000002276'),
+ ('INV00000000002269'),
+ ('INV00000000002277'),
+ ('INV00000000002271'),
+ ('CDF030-APR2026'),
+ ('CDF030-MAY2026'),
+ ('INV00000000002270'),
+ ('MAY2026-CDF022'),
+ ('INV00000000002268'),
+ ('INV00000000002272'),
+ ('INV00000000002275'),
+ ('MAY2026-000A1B5'),
+ ('MAY2026-MIL312');
+
+/* 1) Header: which SOPTYPE / open vs history */
+SELECT
+    'HISTORY' AS Src,
+    h.SOPTYPE,
+    RTRIM(h.SOPNUMBE) AS SOPNUMBE,
+    h.CUSTNMBR,
+    h.VOIDSTTS,
+    h.GLPOSTDT,
+    h.DOCAMNT
+FROM SOP30200 h
+JOIN @Docs d ON RTRIM(h.SOPNUMBE) = RTRIM(d.SOPNUMBE)
+
+UNION ALL
+
+SELECT
+    'OPEN',
+    h.SOPTYPE,
+    RTRIM(h.SOPNUMBE),
+    h.CUSTNMBR,
+    h.VOIDSTTS,
+    h.GLPOSTDT,
+    h.DOCAMNT
+FROM SOP10100 h
+JOIN @Docs d ON RTRIM(h.SOPNUMBE) = RTRIM(d.SOPNUMBE)
+ORDER BY SOPNUMBE, Src;
+
+/* 2) User-defined row (Accession should be USERDEF1 if filled) */
+SELECT
+    RTRIM(u.SOPNUMBE) AS SOPNUMBE,
+    u.SOPTYPE,
+    RTRIM(u.USERDEF1) AS USERDEF1_Accession,
+    RTRIM(u.USERDEF2) AS USERDEF2,
+    RTRIM(u.USRDEF03) AS USRDEF03,
+    RTRIM(u.USRDEF04) AS USRDEF04,
+    RTRIM(u.USRDEF05) AS USRDEF05
+FROM SOP10106 u
+JOIN @Docs d ON RTRIM(u.SOPNUMBE) = RTRIM(d.SOPNUMBE)
+ORDER BY u.SOPNUMBE, u.SOPTYPE;
+
+/* 3) Docs with NO SOP10106 row at all */
+SELECT RTRIM(d.SOPNUMBE) AS SOPNUMBE, 'NO SOP10106 ROW' AS Issue
+FROM @Docs d
+WHERE NOT EXISTS (
+    SELECT 1 FROM SOP10106 u WHERE RTRIM(u.SOPNUMBE) = RTRIM(d.SOPNUMBE)
+);
+
+/* 4) Docs with SOP10106 but blank USERDEF1 */
+SELECT
+    RTRIM(u.SOPNUMBE) AS SOPNUMBE,
+    u.SOPTYPE,
+    'SOP10106 EXISTS BUT USERDEF1 EMPTY' AS Issue
+FROM SOP10106 u
+JOIN @Docs d ON RTRIM(u.SOPNUMBE) = RTRIM(d.SOPNUMBE)
+WHERE NULLIF(RTRIM(u.USERDEF1), '') IS NULL;
+
+/* 5) Staging vs GP (after reload) */
+SELECT
+    RTRIM(i.orginalDocNumber) AS orginalDocNumber,
+    i.AccessionNumber,
+    i.transactionDate,
+    i.totalCharge
+FROM dbo.C_AE_Feed_Items i
+JOIN @Docs d ON RTRIM(i.orginalDocNumber) = RTRIM(d.SOPNUMBE)
+ORDER BY i.orginalDocNumber;

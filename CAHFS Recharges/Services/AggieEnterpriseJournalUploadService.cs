@@ -389,12 +389,14 @@ namespace CAHFS_Recharges.Services
 
                 var udfTestCode = SafeTrim(i.TestCode, 50);
                 var udfTestName = SafeTrim(i.TestName, 50);
-                // Accession# / FolderNo = first 8 chars of Original Doc #;
-                // Submitter name = Client_Name, else Organization_Name (same as COA Validations display)
-                var udfFolderNo = SafeTrim(FolderNoFromDocNumber(i.OrignalDocNumber), 50);
-                var udfSubmitterName = SafeTrim(
-                    !string.IsNullOrWhiteSpace(i.ClientName) ? i.ClientName : i.OrganizationName,
+                // Accession# = GP SOP10106.USERDEF1 when present; else full Original Doc # (avoid INV00000 truncate)
+                // Submitter = Client ID (GP CUSTNMBR)
+                var udfFolderNo = SafeTrim(
+                    !string.IsNullOrWhiteSpace(i.AccessionNumber)
+                        ? i.AccessionNumber
+                        : i.OrignalDocNumber,
                     50);
+                var udfSubmitterName = SafeTrim(i.ClientID, 50);
 
                 var desc = BuildLineDescription(i, integration); // max 100
 
@@ -462,14 +464,6 @@ namespace CAHFS_Recharges.Services
                     }
                 };
             }
-        }
-
-        /// <summary>FolderNo / Accession# is the first 8 characters of Original Doc #.</summary>
-        private static string? FolderNoFromDocNumber(string? docNumber)
-        {
-            var s = (docNumber ?? string.Empty).Trim();
-            if (s.Length == 0) return null;
-            return s.Length <= 8 ? s : s.Substring(0, 8);
         }
 
         // Segment Helpers

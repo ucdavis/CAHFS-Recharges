@@ -14,6 +14,10 @@ namespace CAHFS_Recharges.Models
         [Column("orginalDocNumber")]
         public string OrignalDocNumber { get; set; } = null!;
 
+        /// <summary>GP SOP10106.USERDEF1 (Accession No.). Used for Glide UdfString3 when present.</summary>
+        [Column("AccessionNumber")]
+        public string? AccessionNumber { get; set; }
+
         [Column("DebitChartString")]
         public string? DebitChartString { get; set; }
 

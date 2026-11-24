@@ -452,7 +452,8 @@ try
         // Dashboard (middleware). Auth is enforced by your HangfireAuthorizationFilter + global auth middleware.
         app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
         {
-            AppPath = pathBase + "/Home", // "Back to site" link target
+            // Must include PathBase (e.g. /caei/Home); empty PathBase breaks IIS virtual-directory "Back to site".
+            AppPath = string.IsNullOrEmpty(pathBase) ? "/Home" : pathBase + "/Home",
             Authorization = new Hangfire.Dashboard.IDashboardAuthorizationFilter[]
             {
                 new CAHFS_Recharges.Services.HangfireAuthorizationFilter()

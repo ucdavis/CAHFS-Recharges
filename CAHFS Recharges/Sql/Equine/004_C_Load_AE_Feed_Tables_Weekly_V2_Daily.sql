@@ -8,7 +8,7 @@
   - Find-or-create one batch per slice; later days reload into same batch
   - Filter / transactionDate = POSTEDDT (Posted date)
   - HISTORY + OPEN (same SELECT pattern as validated CAHFS; VHFS501)
-  - Returns: SOPTYPE=4 reverse COA + signed amount (-1 * OXTNDPRC)
+  - Returns: SOPTYPE=4 / negative → reverse COA + ABS(amount) (AE NonNegativeFloat)
   - AccessionNumber = SOP10106.USERDEF1
 
   Deploy order on gpare:
@@ -411,7 +411,7 @@ WHERE A.InvoiceDate >= ''''' + @dt + ''''' '') AS OQ;';
             WHERE batchID = @batchID;
         END;
 
-        /* Same SELECT pattern as validated CAHFS — HISTORY + OPEN; signed returns; VHFS501 */
+        /* HISTORY + OPEN; POSTEDDT; returns = reverse COA + ABS(amount); VHFS501 */
         INSERT INTO dbo.C_AE_Feed_Items
         (
             orginalDocNumber,
@@ -466,7 +466,7 @@ WHERE A.InvoiceDate >= ''''' + @dt + ''''' '') AS OQ;';
                 LEFT(s303.ITEMDESC,50) AS TestName,
                 s303.QUANTITY AS quantity,
                 s303.UNITPRCE AS unitPrice,
-                CASE WHEN s302.SOPTYPE = 4 THEN -1 * s303.OXTNDPRC ELSE s303.OXTNDPRC END AS totalCharge,
+                ABS(s303.OXTNDPRC) AS totalCharge,
                 @batchID AS batchID,
                 c.CUSTNMBR AS clientID,
                 NULL AS DebitStringValid,
@@ -511,7 +511,7 @@ WHERE A.InvoiceDate >= ''''' + @dt + ''''' '') AS OQ;';
                 LEFT(s303.ITEMDESC,50) AS TestName,
                 s303.QUANTITY AS quantity,
                 s303.UNITPRCE AS unitPrice,
-                CASE WHEN s302.SOPTYPE = 4 THEN -1 * s303.OXTNDPRC ELSE s303.OXTNDPRC END AS totalCharge,
+                ABS(s303.OXTNDPRC) AS totalCharge,
                 @batchID AS batchID,
                 c.CUSTNMBR AS clientID,
                 NULL AS DebitStringValid,
@@ -551,7 +551,7 @@ WHERE A.InvoiceDate >= ''''' + @dt + ''''' '') AS OQ;';
                 LEFT(s303.ITEMDESC,50) AS TestName,
                 s303.QUANTITY AS quantity,
                 s303.UNITPRCE AS unitPrice,
-                CASE WHEN s302.SOPTYPE = 4 THEN -1 * s303.OXTNDPRC ELSE s303.OXTNDPRC END AS totalCharge,
+                ABS(s303.OXTNDPRC) AS totalCharge,
                 @batchID AS batchID,
                 c.CUSTNMBR AS clientID,
                 NULL AS DebitStringValid,
@@ -596,7 +596,7 @@ WHERE A.InvoiceDate >= ''''' + @dt + ''''' '') AS OQ;';
                 LEFT(s303.ITEMDESC,50) AS TestName,
                 s303.QUANTITY AS quantity,
                 s303.UNITPRCE AS unitPrice,
-                CASE WHEN s302.SOPTYPE = 4 THEN -1 * s303.OXTNDPRC ELSE s303.OXTNDPRC END AS totalCharge,
+                ABS(s303.OXTNDPRC) AS totalCharge,
                 @batchID AS batchID,
                 c.CUSTNMBR AS clientID,
                 NULL AS DebitStringValid,

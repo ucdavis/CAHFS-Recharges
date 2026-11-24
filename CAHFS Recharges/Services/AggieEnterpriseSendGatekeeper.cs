@@ -3,16 +3,21 @@ using System.Threading;
 using System.Threading.Tasks;
 using CAHFS_Recharges.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace CAHFS_Recharges.Services
 {
     public sealed class AggieEnterpriseSendGatekeeper
     {
         private readonly IIntegrationDbResolver _dbResolver;
+        private readonly IConfiguration _configuration;
 
-        public AggieEnterpriseSendGatekeeper(IIntegrationDbResolver dbResolver)
+        public AggieEnterpriseSendGatekeeper(
+            IIntegrationDbResolver dbResolver,
+            IConfiguration configuration)
         {
             _dbResolver = dbResolver;
+            _configuration = configuration;
         }
 
         public sealed record GateResult(bool CanSend, string Message, GateSummary? Summary = null);
@@ -23,7 +28,9 @@ namespace CAHFS_Recharges.Services
             int TotalItems,
             int PendingCount,
             int InvalidCount,
-            int NotValidCount
+            int NotValidCount,
+            DateTime? WeekEndDate = null,
+            bool WeekInProgress = false
         );
 
         public async Task<GateResult> CanSendBatchAsync(Guid batchId, IntegrationType integration, CancellationToken ct = default)
@@ -32,16 +39,26 @@ namespace CAHFS_Recharges.Services
 
             var feedBatches = _dbResolver.GetFeedBatches(integration);
 
-            var batchStatus = await feedBatches
+            var batch = await feedBatches
                 .AsNoTracking()
                 .Where(b => b.BatchID == batchId)
-                .Select(b => b.AERequestStatus)
+                .Select(b => new
+                {
+                    b.AERequestStatus,
+                    b.WeekEndDate,
+                    b.AETransactionDate
+                })
                 .FirstOrDefaultAsync(ct);
 
-            if (batchStatus == null)
+            if (batch == null)
                 return new GateResult(false, "Batch not found.", new GateSummary(batchId, null, 0, 0, 0, 0));
 
-            var summary = await BuildSummaryAsync(batchId, batchStatus, integration, ct);
+            var batchStatus = batch.AERequestStatus;
+            var weekEnd = AeBatchSendWindow.ResolveWeekEndDate(batch.WeekEndDate, batch.AETransactionDate);
+            var today = AeBatchSendWindow.GetBusinessToday(_configuration);
+            var weekInProgress = AeBatchSendWindow.IsWeekInProgress(weekEnd, today);
+
+            var summary = await BuildSummaryAsync(batchId, batchStatus, weekEnd, weekInProgress, integration, ct);
 
             // Rule 1: Batch must be Ready
             if (!string.Equals(batchStatus, "Ready", StringComparison.OrdinalIgnoreCase))
@@ -49,6 +66,16 @@ namespace CAHFS_Recharges.Services
                 return new GateResult(
                     false,
                     $"Blocked: Batch is not Ready. Current status: {batchStatus}",
+                    summary
+                );
+            }
+
+            // Rule 1b: Do not send until after WeekEndDate (month-slice still accumulating)
+            if (weekInProgress && weekEnd.HasValue)
+            {
+                return new GateResult(
+                    false,
+                    AeBatchSendWindow.WeekInProgressBlockedMessage(weekEnd.Value),
                     summary
                 );
             }
@@ -86,13 +113,18 @@ namespace CAHFS_Recharges.Services
             return new GateResult(true, "OK: Batch is Ready to send to Aggie Enterprise.", summary);
         }
 
-        private async Task<GateSummary> BuildSummaryAsync(Guid batchId, string? batchStatus, IntegrationType integration, CancellationToken ct)
+        private async Task<GateSummary> BuildSummaryAsync(
+            Guid batchId,
+            string? batchStatus,
+            DateTime? weekEnd,
+            bool weekInProgress,
+            IntegrationType integration,
+            CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
 
             var feedItems = _dbResolver.GetFeedItems(integration);
 
-            // One query -> all counts
             var agg = await feedItems
                 .AsNoTracking()
                 .Where(i => i.BatchID == batchId && !i.DoNotInclude)
@@ -112,10 +144,9 @@ namespace CAHFS_Recharges.Services
                 })
                 .FirstOrDefaultAsync(ct);
 
-            // Batch exists but no items
             if (agg == null)
             {
-                return new GateSummary(batchId, batchStatus, 0, 0, 0, 0);
+                return new GateSummary(batchId, batchStatus, 0, 0, 0, 0, weekEnd, weekInProgress);
             }
 
             return new GateSummary(
@@ -124,7 +155,9 @@ namespace CAHFS_Recharges.Services
                 agg.Total,
                 agg.Pending,
                 agg.Invalid,
-                agg.NotValid
+                agg.NotValid,
+                weekEnd,
+                weekInProgress
             );
         }
     }

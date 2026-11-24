@@ -269,15 +269,22 @@
                             <td>@(b.DateSent?.ToString("yyyy-MM-dd") ?? "")</td>
                             <td>
                                 @{
+                                    var weekInProgress = AeBatchSendWindow.IsWeekInProgress(b, AeBatchSendWindow.GetBusinessToday());
                                     var batchStatusClass = b.AERequestStatus switch
                                     {
+                                        "Ready" when weekInProgress => "badge-soft-warning",
                                         "Ready" or "Validated" or "SUCCESS" or "Success" or "Sent" => "badge-soft-success",
                                         "Needs Review" or "Pending" => "badge-soft-warning",
                                         "ERROR" or "Error" => "badge-soft-danger",
                                         _ => "badge-soft-secondary"
                                     };
+                                    var weekEnd = AeBatchSendWindow.ResolveWeekEndDate(b);
                                 }
                                 <span class="badge @batchStatusClass">@b.AERequestStatus</span>
+                                @if (weekInProgress && weekEnd.HasValue && string.Equals(b.AERequestStatus, "Ready", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <div class="small text-muted mt-1">@AeBatchSendWindow.WeekInProgressLabel(weekEnd.Value)</div>
+                                }
                             </td>
                             <td>@b.AEJournalName</td>
                             <td class="font-mono">@b.AEJournalReference</td>

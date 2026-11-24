@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace CAHFS_Recharges.Pages.Integrations.Staging
 {
@@ -21,11 +22,13 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
         private readonly IIntegrationDbResolver _dbResolver;
         private readonly AggieEnterpriseSendGatekeeper _gatekeeper;
         private readonly AggieEnterpriseJournalUploadService _upload;
+        private readonly IConfiguration _configuration;
 
         public SendToAggieEnterpriseModel(
             IIntegrationDbResolver dbResolver,
             AggieEnterpriseSendGatekeeper gatekeeper,
             AggieEnterpriseJournalUploadService upload,
+            IConfiguration configuration,
             IIntegrationContextService integrationService,
             IAuthorizationService authorizationService)
             : base(integrationService, authorizationService)
@@ -33,6 +36,7 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
             _dbResolver = dbResolver;
             _gatekeeper = gatekeeper;
             _upload = upload;
+            _configuration = configuration;
         }
 
         /// Gets the current integration type (resolved from route).
@@ -65,6 +69,13 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
         public bool GateCanSend { get; set; }
         public string GateMessage { get; set; } = "Select a batch.";
         public AggieEnterpriseSendGatekeeper.GateSummary? GateSummary { get; set; }
+
+        /// <summary>True when selected batch week-slice has not ended yet (send blocked).</summary>
+        public bool WeekInProgress { get; set; }
+
+        public DateTime? SelectedWeekStartDate { get; set; }
+        public DateTime? SelectedWeekEndDate { get; set; }
+        public string? WeekInProgressLabel { get; set; }
 
         public AggieEnterpriseJournalUploadService.PreviewResult? Preview { get; set; }
 
@@ -348,16 +359,29 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                     AccountingDateText = acctDt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                     AccountingPeriodText = acctDt.ToString("MMM-yy", CultureInfo.InvariantCulture);
 
+                    SelectedWeekStartDate = SelectedBatch.WeekStartDate?.Date;
+                    SelectedWeekEndDate = AeBatchSendWindow.ResolveWeekEndDate(SelectedBatch);
+
                     var gate = await _gatekeeper.CanSendBatchAsync(SelectedBatchId.Value, ResolvedIntegration);
                     GateCanSend = gate.CanSend;
                     GateMessage = gate.Message;
                     GateSummary = gate.Summary;
+                    WeekInProgress = gate.Summary?.WeekInProgress
+                        ?? AeBatchSendWindow.IsWeekInProgress(SelectedBatch, AeBatchSendWindow.GetBusinessToday(_configuration));
+                    SelectedWeekEndDate = gate.Summary?.WeekEndDate ?? SelectedWeekEndDate;
+                    WeekInProgressLabel = WeekInProgress && SelectedWeekEndDate.HasValue
+                        ? AeBatchSendWindow.WeekInProgressLabel(SelectedWeekEndDate.Value)
+                        : null;
                 }
                 else
                 {
                     GateCanSend = false;
                     GateMessage = "Selected batch not found.";
                     GateSummary = null;
+                    WeekInProgress = false;
+                    WeekInProgressLabel = null;
+                    SelectedWeekStartDate = null;
+                    SelectedWeekEndDate = null;
 
                     ShowPreview = false;
                     PreviewForBatchId = null;
@@ -369,6 +393,10 @@ namespace CAHFS_Recharges.Pages.Integrations.Staging
                 GateCanSend = false;
                 GateMessage = "Select a batch.";
                 GateSummary = null;
+                WeekInProgress = false;
+                WeekInProgressLabel = null;
+                SelectedWeekStartDate = null;
+                SelectedWeekEndDate = null;
 
                 ShowPreview = false;
                 PreviewForBatchId = null;

@@ -15,7 +15,8 @@
     <div class="mb-4">
         <h1 class="fw-bold mb-1 caei-heading-page">Send to AE</h1>
         <p class="mb-0 text-muted">
-            Manual build, preview, and send for a selected batch. Batch must be <strong>Ready</strong> and all items <strong>Valid</strong>.
+            Manual build, preview, and send for a selected batch. Batch must be <strong>Ready</strong>, all items <strong>Valid</strong>,
+            and the week slice must be finished (send is blocked until the day after <strong>Week End</strong>).
             <span class="ms-2 text-muted small">Last refreshed: @Model.LastRefreshedAt.ToString("HH:mm:ss")</span>
         </p>
     </div>
@@ -138,16 +139,21 @@
                         <option value="" selected="@(!Model.SelectedBatchId.HasValue)">— Select a batch —</option>
                         @foreach (var b in Model.Batches)
                         {
+                            var weekEnd = AeBatchSendWindow.ResolveWeekEndDate(b);
+                            var inProgress = AeBatchSendWindow.IsWeekInProgress(b, AeBatchSendWindow.GetBusinessToday());
                             var statusIcon = b.AERequestStatus switch
                             {
-                                "Ready" => "🟢",
+                                "Ready" => inProgress ? "🟡" : "🟢",
                                 "Needs Review" => "🟡",
                                 "Sent" or "Complete" => "🔵",
                                 "Error" => "🔴",
                                 _ => "⚪"
                             };
+                            var weekNote = inProgress && weekEnd.HasValue
+                                ? $" — {AeBatchSendWindow.WeekInProgressLabel(weekEnd.Value)}"
+                                : "";
                             <option value="@b.BatchID" selected="@(Model.SelectedBatchId == b.BatchID)">
-                                @statusIcon @b.AEJournalName — @(b.BatchTotal?.ToString("C") ?? "$0.00") — @(b.AERequestStatus ?? "Unknown")
+                                @statusIcon @b.AEJournalName — @(b.BatchTotal?.ToString("C") ?? "$0.00") — @(b.AERequestStatus ?? "Unknown")@weekNote
                             </option>
                         }
                     </select>
@@ -201,11 +207,25 @@
                                             <td>@(Model.AccountingPeriodText ?? "—")</td>
                                         </tr>
                                         <tr>
+                                            <td class="text-muted">Week slice</td>
+                                            <td>
+                                                @if (Model.SelectedWeekStartDate.HasValue || Model.SelectedWeekEndDate.HasValue)
+                                                {
+                                                    <span>@(Model.SelectedWeekStartDate?.ToString("yyyy-MM-dd") ?? "—") to @(Model.SelectedWeekEndDate?.ToString("yyyy-MM-dd") ?? "—")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">—</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr>
                                             <td class="text-muted">AE Status</td>
                                             <td>
                                                 @{
                                                     var statusBadgeClass = Model.SelectedBatch.AERequestStatus switch
                                                     {
+                                                        "Ready" when Model.WeekInProgress => "caei-badge-inline-pending",
                                                         "Ready" => "caei-badge-inline-success",
                                                         "Needs Review" => "caei-badge-inline-pending",
                                                         "Sent" or "Complete" => "caei-badge-inline-sent",
@@ -214,6 +234,15 @@
                                                     };
                                                 }
                                                 <span class="px-2 py-1 caei-badge-inline @statusBadgeClass">@(Model.SelectedBatch.AERequestStatus ?? "Unknown")</span>
+                                                @if (Model.WeekInProgress && !string.IsNullOrWhiteSpace(Model.WeekInProgressLabel))
+                                                {
+                                                    <div class="mt-1">
+                                                        <span class="px-2 py-1 caei-badge-inline caei-badge-inline-pending" title="@Model.WeekInProgressLabel">
+                                                            In progress — send after week end
+                                                        </span>
+                                                        <div class="small text-muted mt-1">@Model.WeekInProgressLabel</div>
+                                                    </div>
+                                                }
                                             </td>
                                         </tr>
                                         <tr>
@@ -297,7 +326,7 @@
                                         caei-capability="PostBatch"
                                         data-bs-toggle="modal" data-bs-target="#confirmSendModal"
                                         disabled="@(!Model.GateCanSend || !isOperator)"
-                                        title="@(!isOperator ? "Requires Operator permissions" : (!Model.GateCanSend ? "Batch not ready to send" : "Send this batch to Aggie Enterprise"))">
+                                        title="@(!isOperator ? "Requires Operator permissions" : (!Model.GateCanSend ? (Model.WeekInProgress ? Model.WeekInProgressLabel : Model.GateMessage) : "Send this batch to Aggie Enterprise"))">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                                     Send to AE
                                 </button>

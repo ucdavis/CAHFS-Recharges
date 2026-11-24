@@ -13,7 +13,7 @@ Same slice rules as CAHFS: **1–7, 8–14, 15–21, 22–28, 29–EOM**.
 | Journal name | `Equine sales {start} to {end}` |
 | Filter / line date | **POSTEDDT** |
 | History | HISTORY + OPEN (same as validated CAHFS) |
-| Returns | SOPTYPE=4 → reverse COA + signed `(-1 * OXTNDPRC)` |
+| Returns | SOPTYPE=4 / negative → reverse COA + positive `ABS(amount)` |
 | Accession | `SOP10106.USERDEF1` |
 
 ## Deploy order on `gpare`

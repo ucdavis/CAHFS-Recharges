@@ -16,7 +16,7 @@ Proc: `dbo.C_Load_AE_Feed_Tables_Weekly_V2` (see `004_C_Load_AE_Feed_Tables_Week
 - First run in a slice **creates** the batch; later days **reload** into the same batch
 - Selection + line `transactionDate` = **Posted date (`POSTEDDT`)**
 - **HISTORY + OPEN** (validated CAHFS SELECT — do not change)
-- Returns (`SOPTYPE = 4`): reverse COA + signed `(-1 * OXTNDPRC)`
+- Returns (`SOPTYPE = 4` / negative): reverse COA + **positive** `ABS(amount)` (AE NonNegativeFloat)
 - Accession = `SOP10106.USERDEF1`
 - If `dateSent` is set, slice is skipped (already sent)
 

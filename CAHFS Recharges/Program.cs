@@ -32,7 +32,7 @@ using System.Xml.Linq;
 var builder = WebApplication.CreateBuilder(args);
 
 // DoS / request-parsing hardening (defense-in-depth for form-body and oversized request abuse).
-// CVE-2026-70196 / CVE-2026-70188 also require ASP.NET Core runtime ≥ 9.0.21 (or matching patched band).
+// CVE-2026-114149 (multipart header DoS) also requires ASP.NET Core runtime ≥ 9.0.23 (or matching patched band).
 const long MaxRequestBodyBytes = 10L * 1024 * 1024; // 10 MB
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -460,7 +460,7 @@ try
         });
 
         var hangCronDaily = builder.Configuration.GetValue<string>("Hangfire:CronDaily") ?? "0 2 * * *";
-        var hangCronWed = builder.Configuration.GetValue<string>("Hangfire:CronWednesday") ?? "0 3 * * 3";
+        var hangCronStatusPoll = builder.Configuration.GetValue<string>("Hangfire:CronStatusPoll") ?? "*/15 * * * *";
         var tz = hangfireTz ?? TimeZoneInfo.Local;
 
         RecurringJob.AddOrUpdate<HangfireJobs>(
@@ -470,19 +470,16 @@ try
             new RecurringJobOptions { TimeZone = tz });
 
         RecurringJob.AddOrUpdate<HangfireJobs>(
-            "WednesdaySendLastWeek",
-            job => job.SendLastWeekBatchesJob(),
-            hangCronWed,
-            new RecurringJobOptions { TimeZone = tz });
-
-        var hangCronStatusPoll = builder.Configuration.GetValue<string>("Hangfire:CronStatusPoll") ?? "*/15 * * * *";
-        RecurringJob.AddOrUpdate<HangfireJobs>(
             "PollPendingAeStatuses",
             job => job.PollPendingAeStatusesJob(),
             hangCronStatusPoll,
             new RecurringJobOptions { TimeZone = tz });
 
-        var lockboxEnabled = builder.Configuration.GetValue<bool?>("Lockbox:Enabled") ?? true;
+        // AE send is manual in the UI — drop any leftover Wednesday auto-send schedule
+        RecurringJob.RemoveIfExists("WednesdaySendLastWeek");
+
+        // Fail closed: missing/null Lockbox:Enabled must not schedule ingest/process in Production.
+        var lockboxEnabled = builder.Configuration.GetValue<bool?>("Lockbox:Enabled") ?? false;
         if (lockboxEnabled)
         {
             var lockboxCron = builder.Configuration.GetValue<string>("Lockbox:CronDaily") ?? "0 3 * * *";
@@ -512,6 +509,11 @@ try
                 lockboxProcessCron,
                 new RecurringJobOptions { TimeZone = lockboxTz });
         }
+        else
+        {
+            RecurringJob.RemoveIfExists("LockboxDailyIngest");
+            RecurringJob.RemoveIfExists("LockboxProcessFiles");
+        }
 
         var hiwuEnabled = builder.Configuration.GetValue<bool?>("Hiwu:Enabled") ?? false;
         if (hiwuEnabled)
@@ -535,6 +537,10 @@ try
                 job => job.IngestHiwuFilesJob(),
                 hiwuCron,
                 new RecurringJobOptions { TimeZone = hiwuTz });
+        }
+        else
+        {
+            RecurringJob.RemoveIfExists("HiwuDailyIngest");
         }
     }
 

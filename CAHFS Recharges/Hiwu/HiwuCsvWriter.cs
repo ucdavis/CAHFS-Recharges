@@ -4,21 +4,17 @@ namespace CAHFS_Recharges.Hiwu
 {
     public static class HiwuCsvWriter
     {
-        public static readonly string[] Columns =
-        [
-            "location", "trackingRef", "courier", "dateShipped", "containerLockNumber",
-            "sampledDate", "sampleId", "collectionPoint", "sampleType", "longTermStorage",
-            "numberOfContainers", "expeditedAnalysis", "age", "gender", "lasix", "externalRef",
-            "BSampleTestRequested", "duplicateTCO2SampleRequested"
-        ];
-
         public static string Write(HiwuManifestDocument document)
         {
+            var missionColumns = HiwuManifestDocument.MissionColumns(document);
+            var sampleColumns = HiwuManifestDocument.SampleColumns(document);
+            var columns = missionColumns.Concat(sampleColumns).ToList();
+
             var builder = new StringBuilder();
-            builder.AppendLine(string.Join(",", Columns));
+            builder.AppendLine(string.Join(",", columns));
             foreach (var sample in document.Samples)
             {
-                var cells = Columns.Select(column => Quote(Value(document, sample, column)));
+                var cells = columns.Select(column => Quote(Value(document, sample, column)));
                 builder.AppendLine(string.Join(",", cells));
             }
 

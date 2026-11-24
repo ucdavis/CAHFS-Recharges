@@ -1,8 +1,11 @@
+using CAHFS_Recharges.Hiwu;
 using CAHFS_Recharges.Models;
+using CAHFS_Recharges.Models.Options;
 using CAHFS_Recharges.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 
 namespace CAHFS_Recharges.Authorization
 {
@@ -24,15 +27,21 @@ namespace CAHFS_Recharges.Authorization
         private readonly ICaeiRoleResolver _roleResolver;
         private readonly ICaeiCapabilityService _capabilityService;
         private readonly IIntegrationContextService _integrationContext;
+        private readonly IOptionsMonitor<LockboxOptions> _lockboxOptions;
+        private readonly IOptionsMonitor<HiwuOptions> _hiwuOptions;
 
         public WorkspaceAccessPageFilter(
             ICaeiRoleResolver roleResolver,
             ICaeiCapabilityService capabilityService,
-            IIntegrationContextService integrationContext)
+            IIntegrationContextService integrationContext,
+            IOptionsMonitor<LockboxOptions> lockboxOptions,
+            IOptionsMonitor<HiwuOptions> hiwuOptions)
         {
             _roleResolver = roleResolver;
             _capabilityService = capabilityService;
             _integrationContext = integrationContext;
+            _lockboxOptions = lockboxOptions;
+            _hiwuOptions = hiwuOptions;
         }
 
         public Task OnPageHandlerSelectionAsync(PageHandlerSelectedContext context) =>
@@ -69,6 +78,7 @@ namespace CAHFS_Recharges.Authorization
                     var lab = http.Request.Form["integration"].ToString();
                     if (!ProductFamilyExtensions.TryParse(family, out var familyEnum)
                         || !IntegrationTypeExtensions.TryParse(lab, out var labEnum)
+                        || !IsProductFamilyFeatureEnabled(familyEnum)
                         || !_capabilityService.CanOpenWorkspace(username, labEnum.ToString(), familyEnum.ToString()))
                     {
                         context.Result = RedirectAccessDenied(pathBase, "workspace");
@@ -99,7 +109,8 @@ namespace CAHFS_Recharges.Authorization
                 return;
             }
 
-            if (!_capabilityService.IsInProductFamily(username, familyName)
+            if (!IsProductFamilyFeatureEnabled(familyName)
+                || !_capabilityService.IsInProductFamily(username, familyName)
                 || !_capabilityService.IsInLab(username, labName))
             {
                 context.Result = RedirectAccessDenied(pathBase, "workspace");
@@ -216,6 +227,21 @@ namespace CAHFS_Recharges.Authorization
             }
 
             return false;
+        }
+
+        private bool IsProductFamilyFeatureEnabled(ProductFamily family) =>
+            family switch
+            {
+                ProductFamily.Lockbox => _lockboxOptions.CurrentValue.Enabled,
+                ProductFamily.Hiwu => _hiwuOptions.CurrentValue.Enabled,
+                _ => true
+            };
+
+        private bool IsProductFamilyFeatureEnabled(string familyName)
+        {
+            if (!ProductFamilyExtensions.TryParse(familyName, out var family))
+                return false;
+            return IsProductFamilyFeatureEnabled(family);
         }
 
         private static string ResolveRequiredCapability(HttpContext http, string path)

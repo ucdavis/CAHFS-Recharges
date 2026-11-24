@@ -61,6 +61,8 @@
 		<!-- Override vulnerable transitive packages from package audit -->
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="AngleSharp" Version="1.8.5" />
+		<!-- CVE-2026-114149 (GHSA-x33c-w48q-qrgc): StrawberryShake pulls WebUtilities 9.0.2; pin patched band. Host runtime must also be ≥ 9.0.23. -->
+		<PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="9.0.23" />
 	</ItemGroup>
 
 	<ItemGroup>

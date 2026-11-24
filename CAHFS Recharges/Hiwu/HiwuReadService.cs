@@ -179,12 +179,20 @@ namespace CAHFS_Recharges.Hiwu
                         _db.ImportSamples.RemoveRange(existing);
 
                     var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    for (var index = 0; index < document.Samples.Count; index++)
+                    foreach (var import in HiwuFileRepository.BuildImportSampleRows(document))
                     {
-                        var id = HiwuCoflFileOrderService.SampleKey(document.Samples[index], index).Trim();
+                        var id = import.SampleId.Trim();
                         if (id.Length == 0 || id.Length > 100 || !seen.Add(id))
                             continue;
-                        _db.ImportSamples.Add(new HiwuImportSample { FileId = entity.FileId, SampleId = id });
+                        var sampleRef = import.SampleRef;
+                        if (sampleRef != null && sampleRef.Length > 100)
+                            sampleRef = sampleRef[..100];
+                        _db.ImportSamples.Add(new HiwuImportSample
+                        {
+                            FileId = entity.FileId,
+                            SampleId = id,
+                            SampleRef = sampleRef
+                        });
                     }
                 }
 

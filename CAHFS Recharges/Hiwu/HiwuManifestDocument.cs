@@ -26,28 +26,26 @@ namespace CAHFS_Recharges.Hiwu
 
     public sealed class HiwuManifestDocument
     {
+        /// Preferred mission column order (v2.0 additive; extras append dynamically).
         public static readonly string[] MissionFields =
         [
             "location", "trackingRef", "courier", "dateShipped", "containerLockNumber", "targetAnalytes"
         ];
 
+        /// Preferred sample column order from Samples XSD v2.0; unknown keys append dynamically.
         public static readonly string[] SampleFields =
         [
-            "sampledDate", "sampleId", "collectionPoint", "sampleType", "age", "gender", "lasix",
-            "longTermStorage", "externalRef", "numberOfContainers", "optionalComment", "expeditedAnalysis",
-            "BSampleTestRequested", "BSampleTestNotes", "duplicateTCO2SampleRequested",
-            "hairType", "hairCollectionMethod", "segmentalAnalysisRequested"
+            "sampleRef", "sampledDate", "collectionPoint", "age", "gender", "lasix", "sampleType",
+            "longTermStorage", "discardDate", "externalRef", "sampleId", "numberOfContainers",
+            "optionalComment", "expeditedAnalysis", "BSampleTestRequested", "BSampleTestNotes",
+            "duplicateTCO2SampleRequested", "hairType", "hairCollectionMethod", "segmentalAnalysisRequested",
+            "medicationsAdministered", "collectedBeforeDeath"
         ];
 
         public static readonly string[] BooleanFields =
         [
             "lasix", "longTermStorage", "expeditedAnalysis", "BSampleTestRequested",
-            "duplicateTCO2SampleRequested", "segmentalAnalysisRequested"
-        ];
-
-        public static readonly string[] OptionalSampleFields =
-        [
-            "optionalComment", "BSampleTestNotes", "hairType", "hairCollectionMethod", "segmentalAnalysisRequested"
+            "duplicateTCO2SampleRequested", "segmentalAnalysisRequested", "collectedBeforeDeath"
         ];
 
         public Dictionary<string, string> Mission { get; } = new(StringComparer.Ordinal);
@@ -116,12 +114,51 @@ namespace CAHFS_Recharges.Hiwu
             return string.Equals(Display("BSampleTestRequested", value), "Yes", StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsTransferCollection(HiwuSampleDocument sample)
+        {
+            sample.Fields.TryGetValue("collectionPoint", out var value);
+            return string.Equals(value?.Trim(), "TRANSFER", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// B-Sample and Transfer: create animal/specimen only — no test schedules.
+        public static bool SkipTestAssignment(HiwuSampleDocument sample) =>
+            IsBSampleRequested(sample) || IsTransferCollection(sample);
+
         public static bool AnyBSampleRequested(HiwuManifestDocument document) =>
             document.Samples.Any(IsBSampleRequested);
 
+        public static string? ReadSampleRef(HiwuSampleDocument sample)
+        {
+            if (!sample.Fields.TryGetValue("sampleRef", out var value))
+                return null;
+            value = value.Trim();
+            return value.Length == 0 ? null : value;
+        }
+
+        /// Preferred order, then any other non-empty keys present on the mission.
+        public static IReadOnlyList<string> MissionColumns(HiwuManifestDocument document) =>
+            OrderedPresent(MissionFields, document.Mission.Keys.Where(key =>
+                document.Mission.TryGetValue(key, out var value) && value.Length > 0));
+
+        /// Preferred order, then any other non-empty keys present on any sample.
+        public static IReadOnlyList<string> SampleColumns(HiwuManifestDocument document)
+        {
+            var present = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var sample in document.Samples)
+            {
+                foreach (var pair in sample.Fields)
+                {
+                    if (pair.Value.Length > 0)
+                        present.Add(pair.Key);
+                }
+            }
+
+            return OrderedPresent(SampleFields, present);
+        }
+
         public List<HiwuFieldCompare> CompareMission(HiwuManifestDocument original)
         {
-            return CompareFields(MissionFields, Mission, original.Mission);
+            return CompareFields(FieldOrder(MissionFields, Mission, original.Mission), Mission, original.Mission);
         }
 
         public List<HiwuSampleCompare> CompareSamples(HiwuManifestDocument original)
@@ -135,11 +172,44 @@ namespace CAHFS_Recharges.Hiwu
                 {
                     SampleId = sample.SampleId,
                     MissingOnOriginal = match == null,
-                    Fields = CompareFields(SampleFields, sample.Fields, match?.Fields)
+                    Fields = CompareFields(
+                        FieldOrder(SampleFields, sample.Fields, match?.Fields),
+                        sample.Fields,
+                        match?.Fields)
                 });
             }
 
             return rows;
+        }
+
+        private static IReadOnlyList<string> OrderedPresent(IReadOnlyList<string> preferred, IEnumerable<string> presentKeys)
+        {
+            var present = new HashSet<string>(presentKeys, StringComparer.Ordinal);
+            var columns = new List<string>(present.Count);
+            foreach (var field in preferred)
+            {
+                if (present.Remove(field))
+                    columns.Add(field);
+            }
+
+            foreach (var field in present.OrderBy(key => key, StringComparer.Ordinal))
+                columns.Add(field);
+            return columns;
+        }
+
+        private static IEnumerable<string> FieldOrder(
+            IReadOnlyList<string> preferred,
+            Dictionary<string, string> left,
+            Dictionary<string, string>? right)
+        {
+            var present = new HashSet<string>(left.Keys, StringComparer.Ordinal);
+            if (right != null)
+            {
+                foreach (var key in right.Keys)
+                    present.Add(key);
+            }
+
+            return OrderedPresent(preferred, present);
         }
 
         private static List<HiwuFieldCompare> CompareFields(

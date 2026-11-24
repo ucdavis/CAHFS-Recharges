@@ -55,9 +55,20 @@ namespace CAHFS_Recharges.Hiwu
             _db.Entry(file).State = EntityState.Detached;
         }
 
-        public async Task ReplaceImportSamplesAsync(
+        public Task ReplaceImportSamplesAsync(
             Guid fileId,
             IReadOnlyList<string> sampleIds,
+            CancellationToken cancellationToken = default)
+        {
+            var rows = sampleIds
+                .Select(id => (SampleId: id, SampleRef: (string?)null))
+                .ToList();
+            return ReplaceImportSamplesAsync(fileId, rows, cancellationToken);
+        }
+
+        public async Task ReplaceImportSamplesAsync(
+            Guid fileId,
+            IReadOnlyList<(string SampleId, string? SampleRef)> samples,
             CancellationToken cancellationToken = default)
         {
             var existing = await _db.ImportSamples.Where(row => row.FileId == fileId).ToListAsync(cancellationToken);
@@ -65,12 +76,25 @@ namespace CAHFS_Recharges.Hiwu
                 _db.ImportSamples.RemoveRange(existing);
 
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var sampleId in sampleIds)
+            foreach (var sample in samples)
             {
-                var id = sampleId.Trim();
+                var id = sample.SampleId.Trim();
                 if (id.Length == 0 || id.Length > 100 || !seen.Add(id))
                     continue;
-                _db.ImportSamples.Add(new HiwuImportSample { FileId = fileId, SampleId = id });
+                string? sampleRef = sample.SampleRef;
+                if (sampleRef != null)
+                {
+                    sampleRef = sampleRef.Trim();
+                    if (sampleRef.Length > 100)
+                        sampleRef = sampleRef[..100];
+                }
+
+                _db.ImportSamples.Add(new HiwuImportSample
+                {
+                    FileId = fileId,
+                    SampleId = id,
+                    SampleRef = sampleRef
+                });
             }
         }
 
@@ -80,9 +104,16 @@ namespace CAHFS_Recharges.Hiwu
             // (amended/received already in DB before SampleCount shipped). Avoid brittle "<sample"
             // string match — namespaced XML often uses prefixes.
             // Also evaluate HasBSample once for legacy rows (NULL = not checked yet).
-            // B-Sample is not on C_HIWU_Cofl_Sample — only the manifest / Import_File flag.
+            // Fill SampleRef from RawXml when import rows still have null SampleRef.
+            var needingRef = await _db.ImportSamples.AsNoTracking()
+                .Where(row => row.SampleRef == null)
+                .Select(row => row.FileId)
+                .Distinct()
+                .Take(200)
+                .ToListAsync(cancellationToken);
+
             var files = await _db.ImportFiles
-                .Where(file => file.SampleCount == 0 || file.HasBSample == null)
+                .Where(file => file.SampleCount == 0 || file.HasBSample == null || needingRef.Contains(file.FileId))
                 .OrderByDescending(file => file.ReceivedUtc)
                 .Take(500)
                 .ToListAsync(cancellationToken);
@@ -101,14 +132,13 @@ namespace CAHFS_Recharges.Hiwu
                 }
 
                 var hasBSample = HiwuManifestDocument.AnyBSampleRequested(document);
-                if (document.Samples.Count > 0 && file.SampleCount == 0)
+                var needsIndex = document.Samples.Count > 0
+                    && (file.SampleCount == 0 || needingRef.Contains(file.FileId));
+                if (needsIndex)
                 {
-                    var sampleIds = new List<string>(document.Samples.Count);
-                    for (var index = 0; index < document.Samples.Count; index++)
-                        sampleIds.Add(HiwuCoflFileOrderService.SampleKey(document.Samples[index], index));
-
+                    var rows = BuildImportSampleRows(document);
                     file.SampleCount = document.Samples.Count;
-                    await ReplaceImportSamplesAsync(file.FileId, sampleIds, cancellationToken);
+                    await ReplaceImportSamplesAsync(file.FileId, rows, cancellationToken);
                 }
 
                 if (file.HasBSample != hasBSample)
@@ -118,6 +148,20 @@ namespace CAHFS_Recharges.Hiwu
 
             if (updated > 0)
                 await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        public static List<(string SampleId, string? SampleRef)> BuildImportSampleRows(HiwuManifestDocument document)
+        {
+            var rows = new List<(string SampleId, string? SampleRef)>(document.Samples.Count);
+            for (var index = 0; index < document.Samples.Count; index++)
+            {
+                var sample = document.Samples[index];
+                var sampleRef = HiwuManifestDocument.ReadSampleRef(sample);
+                // Empty string marks "evaluated, no sampleRef in XML" so backfill does not re-loop forever.
+                rows.Add((HiwuCoflFileOrderService.SampleKey(sample, index), sampleRef ?? ""));
+            }
+
+            return rows;
         }
 
         public Task AddIngestRunAsync(HiwuIngestRun run, CancellationToken cancellationToken = default)

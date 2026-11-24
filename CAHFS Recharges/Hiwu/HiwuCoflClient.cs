@@ -744,6 +744,24 @@ namespace CAHFS_Recharges.Hiwu
             };
         }
 
+        public async Task<HiwuCoflCallResult> CreateAdditionalDataAsync(
+            long specimenId,
+            HiwuCoflAdditionalDataRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            if (specimenId <= 0)
+                throw new ArgumentException("Additional data requires a specimen id.");
+            if (request.AdditionalFieldId <= 0)
+                throw new ArgumentException("Additional data requires an additional_field_id.");
+
+            var response = await PostAsync(
+                "api/v1/additional_data",
+                new AdditionalDataEnvelope(new AdditionalDataBody(specimenId, request)),
+                cancellationToken);
+            return ToResult(response, "v1");
+        }
+
         private async Task<HiwuCoflCallResult> PostWithFallbackAsync(
             string v2Path,
             object v2Payload,
@@ -1581,6 +1599,41 @@ namespace CAHFS_Recharges.Hiwu
             }
 
             public List<SpecimenTestScheduleBody> SpecimenTestSchedules { get; }
+        }
+
+        private sealed class AdditionalDataEnvelope(AdditionalDataBody additionalData)
+        {
+            public AdditionalDataBody AdditionalData { get; } = additionalData;
+        }
+
+        private sealed class AdditionalDataBody
+        {
+            public AdditionalDataBody(long specimenId, HiwuCoflAdditionalDataRequest request)
+            {
+                EntityType = "Specimen";
+                EntityId = specimenId;
+                AdditionalFieldId = request.AdditionalFieldId;
+                BooleanValue = request.BooleanValue;
+                NumericValue = request.NumericValue;
+                StringValue = request.StringValue;
+                DateValue = request.DateValue;
+            }
+
+            public string EntityType { get; }
+            public long EntityId { get; }
+            public long AdditionalFieldId { get; }
+
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public bool? BooleanValue { get; }
+
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public double? NumericValue { get; }
+
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public string? StringValue { get; }
+
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public string? DateValue { get; }
         }
 
         private sealed class SpecimenTestScheduleBody(long specimenId, long testScheduleId)

@@ -12,6 +12,7 @@ namespace CAHFS_Recharges.Hiwu
         public IReadOnlyList<HiwuCoflNamedRecord> SpecimenTypes { get; init; } = [];
         public IReadOnlyList<HiwuCoflNamedRecord> SpecimenDescriptions { get; init; } = [];
         public IReadOnlyList<HiwuCoflNamedRecord> TestSchedules { get; init; } = [];
+        public IReadOnlyList<HiwuCoflNamedRecord> AdditionalFields { get; init; } = [];
         public IReadOnlyDictionary<string, long> ScheduleIds { get; init; } = new Dictionary<string, long>();
         public IReadOnlyDictionary<string, string> LookupErrors { get; init; } = new Dictionary<string, string>();
 
@@ -24,6 +25,11 @@ namespace CAHFS_Recharges.Hiwu
         public const string SpecimenTypesList = "Specimen types";
         public const string SpecimenDescriptionsList = "Specimen descriptions";
         public const string TestSchedulesList = "Test schedules";
+        public const string AdditionalFieldsList = "Additional fields";
+
+        public const string FieldExpeditedAnalysis = "Expedited Analysis";
+        public const string FieldLts = "LTS";
+        public const string FieldNoc = "NOC";
 
         public static async Task<HiwuCoflCatalog> LoadAsync(
             HiwuCoflClient client,
@@ -40,6 +46,15 @@ namespace CAHFS_Recharges.Hiwu
             var specimenTypes = await ListAsync(client, SpecimenTypesList, "api/v2/specimen_types", "api/v1/specimen_types", errors, cancellationToken);
             var descriptions = await ListAsync(client, SpecimenDescriptionsList, "api/v2/specimen_type_descriptions", "api/v1/specimen_type_descriptions", errors, cancellationToken);
             var schedules = await ListAsync(client, TestSchedulesList, "api/v2/test_schedules", "api/v1/test_schedules", errors, cancellationToken);
+            // Soft lookup — failures stay out of LookupErrors so create/cache are not blocked.
+            var softErrors = new Dictionary<string, string>();
+            var additionalFields = await ListAsync(
+                client,
+                AdditionalFieldsList,
+                "api/v2/additional_fields",
+                "api/v1/additional_fields",
+                softErrors,
+                cancellationToken);
             var resolved = new Dictionary<string, long>(scheduleIds, StringComparer.OrdinalIgnoreCase);
             if (!errors.ContainsKey(TestSchedulesList))
             {
@@ -63,7 +78,7 @@ namespace CAHFS_Recharges.Hiwu
 
             return new HiwuCoflCatalog
             {
-                LabId = Match(labs, "Equine Analytical Chemistry"),
+                LabId = Match(labs, "Kenneth L. Maddy Equine Analytical Chemistry Laboratory"),
                 ClientId = Match(clients, "Horseracing Integrity and Welfare Unit (HIWU)"),
                 BreedId = MatchBreed(breeds, "Equidae :: Horse :: NFS"),
                 AgeUomId = Match(uoms, "Years"),
@@ -73,6 +88,7 @@ namespace CAHFS_Recharges.Hiwu
                 SpecimenTypes = specimenTypes,
                 SpecimenDescriptions = descriptions,
                 TestSchedules = schedules,
+                AdditionalFields = additionalFields,
                 ScheduleIds = resolved,
                 LookupErrors = errors
             };
@@ -89,6 +105,8 @@ namespace CAHFS_Recharges.Hiwu
             var matched = MatchCode(marked, code) ?? MatchCode(TestSchedules, code);
             return matched == null ? null : ToScheduleId(TestSchedules, matched.Value);
         }
+
+        public long? MatchAdditionalField(string shortName) => Match(AdditionalFields, shortName);
 
         private static long ToScheduleId(IReadOnlyList<HiwuCoflNamedRecord> records, long id)
         {
@@ -402,7 +420,7 @@ namespace CAHFS_Recharges.Hiwu
         {
             var type = Field(sample, "sampleType");
             var point = Field(sample, "collectionPoint");
-            var skipTests = HiwuManifestDocument.IsBSampleRequested(sample);
+            var skipTests = HiwuManifestDocument.SkipTestAssignment(sample);
             if (catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.SexCodesList)
                 || catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.SpecimenTypesList)
                 || catalog.LookupErrors.ContainsKey(HiwuCoflCatalog.SpecimenDescriptionsList)
@@ -425,7 +443,7 @@ namespace CAHFS_Recharges.Hiwu
             if (descriptionId == null)
                 return (null, sampleKey + " specimen description " + description + " was not found.");
 
-            // B-Sample: create animal/specimen only — same as type/point combos with no panel mapping.
+            // B-Sample / Transfer: create animal/specimen only — no panel mapping.
             var testIds = new List<long>();
             if (!skipTests)
             {
@@ -469,8 +487,107 @@ namespace CAHFS_Recharges.Hiwu
                         CaseCoordinatorComment = EmptyToNull(Field(sample, "optionalComment"))
                     }
                     : null,
-                TestScheduleIds = testIds
+                TestScheduleIds = testIds,
+                AdditionalData = BuildAdditionalData(sample, catalog)
             }, null);
+        }
+
+        public static IReadOnlyList<HiwuCoflAdditionalDataRequest> BuildAdditionalData(
+            HiwuSampleDocument sample,
+            HiwuCoflCatalog catalog)
+        {
+            var rows = new List<HiwuCoflAdditionalDataRequest>();
+            AddBool(rows, catalog, sample, "expeditedAnalysis", HiwuCoflCatalog.FieldExpeditedAnalysis);
+            AddBool(rows, catalog, sample, "longTermStorage", HiwuCoflCatalog.FieldLts);
+            AddNumeric(rows, catalog, sample, "numberOfContainers", HiwuCoflCatalog.FieldNoc);
+            return rows;
+        }
+
+        public static string DescribeAdditionalData(
+            HiwuSampleDocument sample,
+            HiwuCoflCatalog catalog,
+            string hiwuField,
+            string shortName)
+        {
+            if (string.Equals(hiwuField, "numberOfContainers", StringComparison.Ordinal))
+            {
+                var raw = Field(sample, hiwuField);
+                if (raw.Length == 0)
+                    return "Not sent. HIWU file has no value.";
+                if (!double.TryParse(raw, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var number))
+                    return "Not sent. Value \"" + raw + "\" is not numeric.";
+                var nocId = catalog.MatchAdditionalField(shortName);
+                return nocId == null
+                    ? "Not sent. TraceFirst field \"" + shortName + "\" was not found."
+                    : shortName + " (" + nocId + ") = " + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            var flag = OptionalBool(sample, hiwuField);
+            if (flag == null)
+                return "Not sent. HIWU file has no value.";
+            var fieldId = catalog.MatchAdditionalField(shortName);
+            return fieldId == null
+                ? "Not sent. TraceFirst field \"" + shortName + "\" was not found."
+                : shortName + " (" + fieldId + ") = " + (flag.Value ? "Yes" : "No");
+        }
+
+        private static void AddBool(
+            List<HiwuCoflAdditionalDataRequest> rows,
+            HiwuCoflCatalog catalog,
+            HiwuSampleDocument sample,
+            string hiwuField,
+            string shortName)
+        {
+            var flag = OptionalBool(sample, hiwuField);
+            if (flag == null)
+                return;
+            var fieldId = catalog.MatchAdditionalField(shortName);
+            if (fieldId == null)
+                return;
+            rows.Add(new HiwuCoflAdditionalDataRequest
+            {
+                AdditionalFieldId = fieldId.Value,
+                Label = shortName,
+                BooleanValue = flag.Value
+            });
+        }
+
+        private static void AddNumeric(
+            List<HiwuCoflAdditionalDataRequest> rows,
+            HiwuCoflCatalog catalog,
+            HiwuSampleDocument sample,
+            string hiwuField,
+            string shortName)
+        {
+            var raw = Field(sample, hiwuField);
+            if (raw.Length == 0
+                || !double.TryParse(raw, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var number))
+                return;
+            var fieldId = catalog.MatchAdditionalField(shortName);
+            if (fieldId == null)
+                return;
+            rows.Add(new HiwuCoflAdditionalDataRequest
+            {
+                AdditionalFieldId = fieldId.Value,
+                Label = shortName,
+                NumericValue = number
+            });
+        }
+
+        private static bool? OptionalBool(HiwuSampleDocument sample, string name)
+        {
+            if (!sample.Fields.TryGetValue(name, out var value) || string.IsNullOrWhiteSpace(value))
+                return null;
+            value = value.Trim();
+            if (value is "1" or "true")
+                return true;
+            if (value is "0" or "false")
+                return false;
+            if (string.Equals(value, "Yes", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (string.Equals(value, "No", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return null;
         }
 
         public static IReadOnlyList<string> Panels(string sampleType, string collectionPoint)
@@ -500,11 +617,13 @@ namespace CAHFS_Recharges.Hiwu
             return [];
         }
 
-        /// TraceFirst specimen_type_descriptions: B Sample / B Sample With Lasix (same Lasix pattern as A-sample).
+        /// TraceFirst specimen_type_descriptions: B Sample / Transfer / collection point (+ Lasix when used).
         public static string SpecimenDescription(HiwuSampleDocument sample, string collectionPoint)
         {
             if (HiwuManifestDocument.IsBSampleRequested(sample))
                 return Lasix(sample) ? "B Sample With Lasix" : "B Sample";
+            if (HiwuManifestDocument.IsTransferCollection(sample))
+                return "Transfer";
 
             return collectionPoint + (Lasix(sample) ? " With Lasix" : "");
         }

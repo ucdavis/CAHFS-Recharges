@@ -134,6 +134,16 @@ namespace CAHFS_Recharges.Hiwu
         public string? ResponseBody { get; init; }
     }
 
+    public sealed class HiwuCoflAdditionalDataRequest
+    {
+        public long AdditionalFieldId { get; init; }
+        public string Label { get; init; } = "";
+        public bool? BooleanValue { get; init; }
+        public double? NumericValue { get; init; }
+        public string? StringValue { get; init; }
+        public string? DateValue { get; init; }
+    }
+
     public sealed class HiwuCoflOrderSample
     {
         public string? SampleKey { get; init; }
@@ -142,6 +152,7 @@ namespace CAHFS_Recharges.Hiwu
         public HiwuCoflSpecimenRequest? Specimen { get; init; }
         public long? SpecimenId { get; init; }
         public IReadOnlyList<long> TestScheduleIds { get; init; } = [];
+        public IReadOnlyList<HiwuCoflAdditionalDataRequest> AdditionalData { get; init; } = [];
     }
 
     public sealed class HiwuCoflOrder

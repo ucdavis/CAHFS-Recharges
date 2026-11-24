@@ -131,6 +131,12 @@ namespace CAHFS_Recharges.Hiwu
                 }
 
                 specimenIds.Add(specimenId!.Value);
+
+                // Soft: Additional Data failures must not fail the order or sample import.
+                if (sample.AdditionalData.Count > 0
+                    && !await TryPostAdditionalDataAsync(specimenId.Value, sample.AdditionalData, cancellationToken))
+                    break;
+
                 if (sample.TestScheduleIds.Count == 0)
                     continue;
 
@@ -142,6 +148,24 @@ namespace CAHFS_Recharges.Hiwu
             }
 
             return Finish(steps, accessionId, animalIds, specimenIds);
+        }
+
+        /// Returns false when TraceFirst rate-limited so the caller can pause/retry.
+        private async Task<bool> TryPostAdditionalDataAsync(
+            long specimenId,
+            IReadOnlyList<HiwuCoflAdditionalDataRequest> rows,
+            CancellationToken cancellationToken)
+        {
+            foreach (var row in rows)
+            {
+                var call = await _client.CreateAdditionalDataAsync(specimenId, row, cancellationToken);
+                if (call.Succeeded)
+                    continue;
+                if (IsRateLimit(call.ErrorMessage))
+                    return false;
+            }
+
+            return true;
         }
 
         private static HiwuCoflOrderResult Finish(

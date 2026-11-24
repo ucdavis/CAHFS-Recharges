@@ -23,5 +23,13 @@ namespace CAHFS_Recharges.Models
         public string? AEJournalDescription { get; set; }
         public string? AEJournalReference { get; set; }
         public decimal? BatchTotal { get; set; }
+
+        /// <summary>Month-slice start (1–7, 8–14, …) used by daily feed load find-or-create.</summary>
+        [Column("WeekStartDate")]
+        public DateTime? WeekStartDate { get; set; }
+
+        /// <summary>Month-slice end (inclusive).</summary>
+        [Column("WeekEndDate")]
+        public DateTime? WeekEndDate { get; set; }
     }
 }

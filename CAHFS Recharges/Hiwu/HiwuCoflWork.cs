@@ -80,7 +80,7 @@ namespace CAHFS_Recharges.Hiwu
             var problems = new List<string>();
             var accession = new List<HiwuCoflMapLine>
             {
-                Line("Lab", "Lab", Required(catalog, HiwuCoflCatalog.Labs, catalog.LabId, "Equine Analytical Chemistry", "Lab Equine Analytical Chemistry was not found.", problems)),
+                Line("Lab", "Lab", Required(catalog, HiwuCoflCatalog.Labs, catalog.LabId, "Kenneth L. Maddy Equine Analytical Chemistry Laboratory", "Lab Kenneth L. Maddy Equine Analytical Chemistry Laboratory was not found.", problems)),
                 Line("Client", "Client", Required(catalog, HiwuCoflCatalog.Clients, catalog.ClientId, "Horseracing Integrity and Welfare Unit (HIWU)", "Client Horseracing Integrity and Welfare Unit (HIWU) was not found.", problems)),
                 Line("Breed", "Breed", Required(catalog, HiwuCoflCatalog.Breeds, catalog.BreedId, "Equidae :: Horse :: NFS", "Breed Equidae :: Horse :: NFS was not found.", problems))
             };
@@ -153,7 +153,7 @@ namespace CAHFS_Recharges.Hiwu
             var point = Field(sample.Fields, "collectionPoint");
             var gender = Field(sample.Fields, "gender");
             var description = HiwuCoflSampleMapper.SpecimenDescription(sample, point);
-            var skipTests = HiwuManifestDocument.IsBSampleRequested(sample);
+            var skipTests = HiwuManifestDocument.SkipTestAssignment(sample);
             var sexFailed = catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.SexCodesList, out var sexError);
             var typeFailed = catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.SpecimenTypesList, out var typeError);
             var descriptionFailed = catalog.LookupErrors.TryGetValue(HiwuCoflCatalog.SpecimenDescriptionsList, out var descriptionError);
@@ -201,7 +201,9 @@ namespace CAHFS_Recharges.Hiwu
             var externalRef = Field(sample.Fields, "externalRef");
             var animalName = string.IsNullOrWhiteSpace(externalRef) ? sample.SampleId : externalRef;
             var testScheduleValue = skipTests
-                ? "Tests will not be assigned (B-Sample)."
+                ? HiwuManifestDocument.IsBSampleRequested(sample)
+                    ? "Tests will not be assigned (B-Sample)."
+                    : "Tests will not be assigned (Transfer)."
                 : tests.Count == 0
                     ? "Tests will not be assigned."
                     : string.Join(", ", tests);
@@ -217,6 +219,9 @@ namespace CAHFS_Recharges.Hiwu
                 Line("Collection point", "Specimen description", descriptionFailed ? descriptionError! : descriptionId == null ? description + " was not found." : description + " (" + descriptionId + ")"),
                 Line("Sampled date", "Collection date", Display(Field(sample.Fields, "sampledDate"))),
                 Line("Optional comment", "Case coordinator comment", Display(Field(sample.Fields, "optionalComment"))),
+                Line("Expedited analysis", "Additional data", HiwuCoflSampleMapper.DescribeAdditionalData(sample, catalog, "expeditedAnalysis", HiwuCoflCatalog.FieldExpeditedAnalysis)),
+                Line("Long term storage", "Additional data", HiwuCoflSampleMapper.DescribeAdditionalData(sample, catalog, "longTermStorage", HiwuCoflCatalog.FieldLts)),
+                Line("Number of containers", "Additional data", HiwuCoflSampleMapper.DescribeAdditionalData(sample, catalog, "numberOfContainers", HiwuCoflCatalog.FieldNoc)),
                 Line("Collection point and sample type", "Test schedule", testScheduleValue)
             ];
         }

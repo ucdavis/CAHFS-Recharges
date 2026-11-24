@@ -1,20 +1,25 @@
 @page
 @model CAHFS_Recharges.Pages.HomeModel
 @inject ICaeiCapabilityService CapService
+@inject Microsoft.Extensions.Options.IOptions<CAHFS_Recharges.Models.Options.LockboxOptions> LockboxOptions
+@inject Microsoft.Extensions.Options.IOptions<CAHFS_Recharges.Hiwu.HiwuOptions> HiwuOptions
 @using CAHFS_Recharges.Models
 @{
     ViewData["Title"] = "Select Integration";
     var username = User.Identity?.Name;
+    // Feature flags gate Lockbox/HIWU even for Admins (phased Production rollout).
+    var lockboxLive = LockboxOptions.Value.Enabled;
+    var hiwuLive = HiwuOptions.Value.Enabled;
     var canAe = CapService.IsInProductFamily(username, nameof(ProductFamily.AE));
-    var canLockbox = CapService.IsInProductFamily(username, nameof(ProductFamily.Lockbox));
-    var canHiwu = CapService.IsInProductFamily(username, nameof(ProductFamily.Hiwu));
+    var canLockbox = lockboxLive && CapService.IsInProductFamily(username, nameof(ProductFamily.Lockbox));
+    var canHiwu = hiwuLive && CapService.IsInProductFamily(username, nameof(ProductFamily.Hiwu));
     var canCahfs = CapService.IsInLab(username, nameof(IntegrationType.CAHFS));
     var canEquine = CapService.IsInLab(username, nameof(IntegrationType.EQUINE));
     var showAeCahfs = CapService.CanOpenWorkspace(username, nameof(IntegrationType.CAHFS), nameof(ProductFamily.AE));
     var showAeEquine = CapService.CanOpenWorkspace(username, nameof(IntegrationType.EQUINE), nameof(ProductFamily.AE));
-    var showLbCahfs = CapService.CanOpenWorkspace(username, nameof(IntegrationType.CAHFS), nameof(ProductFamily.Lockbox));
-    var showLbEquine = CapService.CanOpenWorkspace(username, nameof(IntegrationType.EQUINE), nameof(ProductFamily.Lockbox));
-    var showHiwu = CapService.CanOpenWorkspace(username, nameof(IntegrationType.EQUINE), nameof(ProductFamily.Hiwu));
+    var showLbCahfs = lockboxLive && CapService.CanOpenWorkspace(username, nameof(IntegrationType.CAHFS), nameof(ProductFamily.Lockbox));
+    var showLbEquine = lockboxLive && CapService.CanOpenWorkspace(username, nameof(IntegrationType.EQUINE), nameof(ProductFamily.Lockbox));
+    var showHiwu = hiwuLive && CapService.CanOpenWorkspace(username, nameof(IntegrationType.EQUINE), nameof(ProductFamily.Hiwu));
     var hasAnyWorkspace = showAeCahfs || showAeEquine || showLbCahfs || showLbEquine || showHiwu;
 }
 

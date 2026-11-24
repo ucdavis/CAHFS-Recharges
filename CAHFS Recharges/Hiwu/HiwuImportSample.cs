@@ -6,5 +6,8 @@ namespace CAHFS_Recharges.Hiwu
         public Guid FileId { get; set; }
 
         public string SampleId { get; set; } = "";
+
+        /// HIWU v2 sampleRef (GUID). Null = not backfilled; empty = XML had no sampleRef.
+        public string? SampleRef { get; set; }
     }
 }

@@ -196,19 +196,8 @@ namespace CAHFS_Recharges.Pages.Integrations.Hiwu
             return FilesModel.ToPacific(utc);
         }
 
-        private static IReadOnlyList<string> Columns(HiwuManifestDocument document)
-        {
-            var columns = HiwuManifestDocument.SampleFields
-                .Where(field => !HiwuManifestDocument.OptionalSampleFields.Contains(field, StringComparer.Ordinal))
-                .ToList();
-            foreach (var field in HiwuManifestDocument.OptionalSampleFields)
-            {
-                if (document.Samples.Any(sample => sample.Fields.ContainsKey(field) && sample.Fields[field].Length > 0))
-                    columns.Add(field);
-            }
-
-            return columns;
-        }
+        private static IReadOnlyList<string> Columns(HiwuManifestDocument document) =>
+            HiwuManifestDocument.SampleColumns(document);
 
         private IActionResult? RedirectCahfs()
         {

@@ -21,6 +21,11 @@ namespace CAHFS_Recharges.Hiwu
             IReadOnlyList<string> sampleIds,
             CancellationToken cancellationToken = default);
 
+        Task ReplaceImportSamplesAsync(
+            Guid fileId,
+            IReadOnlyList<(string SampleId, string? SampleRef)> samples,
+            CancellationToken cancellationToken = default);
+
         Task BackfillSampleIndexAsync(CancellationToken cancellationToken = default);
 
         Task AddIngestRunAsync(HiwuIngestRun run, CancellationToken cancellationToken = default);

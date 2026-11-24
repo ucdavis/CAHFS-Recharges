@@ -203,7 +203,7 @@ namespace CAHFS_Recharges.Hiwu
 
             var catalog = await _catalogs.GetAsync(cancellationToken);
             var problems = new List<string>();
-            AddRequired(catalog, HiwuCoflCatalog.Labs, catalog.LabId, "Lab Equine Analytical Chemistry was not found.", problems);
+            AddRequired(catalog, HiwuCoflCatalog.Labs, catalog.LabId, "Lab Kenneth L. Maddy Equine Analytical Chemistry Laboratory was not found.", problems);
             AddRequired(catalog, HiwuCoflCatalog.Clients, catalog.ClientId, "Client Horseracing Integrity and Welfare Unit (HIWU) was not found.", problems);
             AddRequired(catalog, HiwuCoflCatalog.Breeds, catalog.BreedId, "Breed Equidae :: Horse :: NFS was not found.", problems);
             AddRequired(catalog, HiwuCoflCatalog.AgeUnits, catalog.AgeUomId, "Age unit Years was not found.", problems);
@@ -371,7 +371,8 @@ namespace CAHFS_Recharges.Hiwu
                 Animal = null,
                 SpecimenId = sample.SpecimenId,
                 Specimen = sample.SpecimenId == null ? sample.Specimen : null,
-                TestScheduleIds = sample.TestScheduleIds
+                TestScheduleIds = sample.TestScheduleIds,
+                AdditionalData = sample.AdditionalData
             };
 
         private static HiwuCoflOrderSample ContinueFrom(HiwuCoflOrderSample sample, HiwuCoflSampleRow row) =>
@@ -382,7 +383,8 @@ namespace CAHFS_Recharges.Hiwu
                 Animal = row.AnimalId == null ? sample.Animal : null,
                 SpecimenId = row.SpecimenId,
                 Specimen = row.SpecimenId == null ? sample.Specimen : null,
-                TestScheduleIds = sample.TestScheduleIds
+                TestScheduleIds = sample.TestScheduleIds,
+                AdditionalData = sample.AdditionalData
             };
 
         private static bool IsRateLimit(string? message) =>

@@ -19,7 +19,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var field in HiwuManifestDocument.MissionFields)
+                    @foreach (var field in HiwuManifestDocument.MissionColumns(document))
                     {
                         if (!document.Mission.TryGetValue(field, out var value) || value.Length == 0)
                             continue;

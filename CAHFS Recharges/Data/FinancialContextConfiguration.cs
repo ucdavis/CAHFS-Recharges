@@ -26,6 +26,8 @@ namespace CAHFS_Recharges.Data
                 entity.Property(e => e.AEJournalDescription).HasColumnName("AEJournalDescription").HasMaxLength(240);
                 entity.Property(e => e.AEJournalReference).HasColumnName("AEJournalReference").HasMaxLength(25);
                 entity.Property(e => e.BatchTotal).HasColumnName("batchTotal").HasColumnType("numeric(19, 2)");
+                entity.Property(e => e.WeekStartDate).HasColumnName("WeekStartDate").HasColumnType("date");
+                entity.Property(e => e.WeekEndDate).HasColumnName("WeekEndDate").HasColumnType("date");
             });
 
             modelBuilder.Entity<JournalPayload>(entity =>

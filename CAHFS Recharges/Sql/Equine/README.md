@@ -1,35 +1,79 @@
-# Equine (`gpare`) AE feed load updates
+# Equine (`gpare`) AE feed load
 
-Deploy **on `gpare` only** (not `gparc` / CAHFS).
+## Daily month-slice batches (current)
 
-## Changes
+Proc: `dbo.C_Load_AE_Feed_Tables_Weekly_V2` (see `004_C_Load_AE_Feed_Tables_Weekly_V2_Daily.sql`)
 
-1. **VHFS501** chart strings (was VHFS001)
-2. **Returns (`SOPTYPE = 4`)** use reverse COA (same as negative `OXTNDPRC`); amount stays `ABS`
-3. **AccessionNumber** from `SOP10106.USERDEF1` into `C_AE_Feed_Items`
+Same slice rules as CAHFS: **1–7, 8–14, 15–21, 22–28, 29–EOM**.
 
-## Deploy order
+| Difference from CAHFS | Value |
+|-----------------------|--------|
+| Database | `gpare` |
+| Activity / chart | **VHFS501** |
+| Journal name | `Equine sales {start} to {end}` |
+| Filter / line date | **POSTEDDT** |
+| History | HISTORY + OPEN (same as validated CAHFS) |
+| Returns | SOPTYPE=4 → reverse COA + signed `(-1 * OXTNDPRC)` |
+| Accession | `SOP10106.USERDEF1` |
 
-1. Run `001_C_AE_Feed_Items_AccessionNumber.sql` on **gpare** (and on **gparc** before app deploy — same column, CAHFS proc can fill it later)
-2. Open `gpare.dbo.C_Load_AE_Feed_Tables_Weekly_V2` in SSMS
-3. Replace the `INSERT INTO dbo.C_AE_Feed_Items ... ) u;` block with the contents of `002_C_Load_AE_Feed_Tables_Weekly_V2_INSERT_block.sql`
-4. Save / `ALTER` the procedure
-5. Clear or rebuild Equine test batches for the weeks under test, then re-run the proc
-6. Deploy the CAEI app build that maps `AccessionNumber` → Glide `UdfString3` and `ClientID` → `UdfString4`
+## Deploy order on `gpare`
 
-## Smoke checks after reload
+1. `001_C_AE_Feed_Items_AccessionNumber.sql`
+2. `003_C_AE_Feed_Batch_WeekDates.sql`
+3. `004_C_Load_AE_Feed_Tables_Weekly_V2_Daily.sql`
+4. `005_SQLAgent_CAEI_Equine_AE_Feed_Daily.sql` (SQL Agent job — 1:15 AM local; change job owner from `sa`)
+
+`002_…INSERT_block.sql` is superseded by `004` for full daily behavior.
+
+### Prod schedule (Pacific / server local)
+
+| Time | What |
+|------|------|
+| 1:15 AM | This Agent job — load current month-slice |
+| 2:00 AM | Hangfire `DailyCoaValidation` (app) |
+| Manual | AE send in CAEI UI |
+
+## Backfill (no proc change) — May → today
 
 ```sql
--- Chart department
-SELECT TOP 20 DebitChartString, CreditChartString, orginalDocNumber, AccessionNumber, totalCharge
-FROM dbo.C_AE_Feed_Items
-ORDER BY transactionDate DESC;
+USE [gpare];
+GO
 
--- Joe's return (example)
-SELECT orginalDocNumber, AccessionNumber, DebitChartString, CreditChartString, totalCharge, transactionDate
-FROM dbo.C_AE_Feed_Items
-WHERE orginalDocNumber = '00045'
-   OR AccessionNumber = 'D2310704';
+DECLARE @from date = '2026-05-01';
+DECLARE @to   date = CAST(GETDATE() AS date);
+DECLARE @d    date = @from;
+DECLARE @sliceEnd date;
+
+WHILE @d <= @to
+BEGIN
+    SET @sliceEnd =
+        CASE
+            WHEN DAY(@d) BETWEEN 1  AND 7  THEN DATEFROMPARTS(YEAR(@d), MONTH(@d), 7)
+            WHEN DAY(@d) BETWEEN 8  AND 14 THEN DATEFROMPARTS(YEAR(@d), MONTH(@d), 14)
+            WHEN DAY(@d) BETWEEN 15 AND 21 THEN DATEFROMPARTS(YEAR(@d), MONTH(@d), 21)
+            WHEN DAY(@d) BETWEEN 22 AND 28 THEN DATEFROMPARTS(YEAR(@d), MONTH(@d), 28)
+            ELSE EOMONTH(@d)
+        END;
+
+    IF @sliceEnd > @to SET @sliceEnd = @to;
+
+    PRINT CONCAT('Equine slice as-of ', CONVERT(char(10), @sliceEnd, 120));
+    EXEC dbo.C_Load_AE_Feed_Tables_Weekly_V2 @AsOfDate = @sliceEnd;
+
+    SET @d =
+        CASE
+            WHEN DAY(@sliceEnd) = 7  THEN DATEADD(DAY, 1, @sliceEnd)
+            WHEN DAY(@sliceEnd) = 14 THEN DATEADD(DAY, 1, @sliceEnd)
+            WHEN DAY(@sliceEnd) = 21 THEN DATEADD(DAY, 1, @sliceEnd)
+            WHEN DAY(@sliceEnd) = 28 THEN DATEADD(DAY, 1, @sliceEnd)
+            ELSE DATEADD(DAY, 1, EOMONTH(@sliceEnd))
+        END;
+END;
+GO
 ```
 
-Expect VHFS501 in chart strings, AccessionNumber = D2310704 for return 00045, and swapped AR/income vs a normal invoice.
+## Daily job
+
+```sql
+EXEC dbo.C_Load_AE_Feed_Tables_Weekly_V2;  -- current slice only
+```

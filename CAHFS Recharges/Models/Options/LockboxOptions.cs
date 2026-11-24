@@ -9,7 +9,8 @@ namespace CAHFS_Recharges.Models.Options
     {
         public const string SectionName = "Lockbox";
 
-        public bool Enabled { get; set; } = true;
+        /// Fail closed when the key is absent (Production gates Lockbox off until explicitly enabled).
+        public bool Enabled { get; set; }
 
         ///Hangfire cron for nightly ingest (default 3:00 AM).
         public string CronDaily { get; set; } = "0 3 * * *";

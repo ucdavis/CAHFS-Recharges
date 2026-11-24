@@ -45,7 +45,11 @@ namespace CAHFS_Recharges.Hiwu
                 entity.ToTable("C_HIWU_Import_Sample", "dbo");
                 entity.HasKey(e => new { e.FileId, e.SampleId }).HasName("PK_C_HIWU_Import_Sample");
                 entity.Property(e => e.SampleId).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.SampleRef).HasMaxLength(100);
                 entity.HasIndex(e => e.SampleId).HasDatabaseName("IX_C_HIWU_Import_Sample_SampleId");
+                entity.HasIndex(e => e.SampleRef)
+                    .HasDatabaseName("IX_C_HIWU_Import_Sample_SampleRef")
+                    .HasFilter("[SampleRef] IS NOT NULL");
                 entity.HasOne<HiwuImportFile>()
                     .WithMany()
                     .HasForeignKey(e => e.FileId)
